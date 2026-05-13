@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/lenta_cv.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Readme.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1.zip" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/README.roboflow.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/data.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_001701_png.rf.7XxFscqKJMnOpa7Wez3K.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_004354_png.rf.7jcu9UmxFwvBxefUec8Z.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_005755_png.rf.5K3RY1MMzyQD0ElwkSLD.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_016015_png.rf.0lv1eJwMtuD9H6rJKMeN.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_016666_png.rf.55OwXw40lBISwCJx1HdN.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_018118_png.rf.6LbNCjAwEzyRE2l6GJrX.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_018218_png.rf.0jlsdjV2LSPQ7Y801LKo.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_018318_png.rf.AROTQmP3iqF44DCggRDY.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_018568_png.rf.04lZf2e7SFeM3cZC90yB.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_018918_png.rf.zjK4Lfjnes2LgqBE472j.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_019569_png.rf.7GMDiObdqmBz7bHKV2o8.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_019819_png.rf.6M34RXcgviYfSaFL2LLJ.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_019919_png.rf.8RdgRpVLBiq6jtHEggF5.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_021421_png.rf.5ZDKgeUANHqxCCDnMlNB.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_025625_png.rf.BLh54SO7M4iWxbODIBqM.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_025775_png.rf.36M6MpOCEI6ZiBureQVp.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/images/frame_025875_png.rf.728GkRredFPZ1KCbyUEl.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_001701_png.rf.7XxFscqKJMnOpa7Wez3K.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_004354_png.rf.7jcu9UmxFwvBxefUec8Z.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_005755_png.rf.5K3RY1MMzyQD0ElwkSLD.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_016015_png.rf.0lv1eJwMtuD9H6rJKMeN.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_016666_png.rf.55OwXw40lBISwCJx1HdN.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_018118_png.rf.6LbNCjAwEzyRE2l6GJrX.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_018218_png.rf.0jlsdjV2LSPQ7Y801LKo.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_018318_png.rf.AROTQmP3iqF44DCggRDY.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_018568_png.rf.04lZf2e7SFeM3cZC90yB.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_018918_png.rf.zjK4Lfjnes2LgqBE472j.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_019569_png.rf.7GMDiObdqmBz7bHKV2o8.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_019819_png.rf.6M34RXcgviYfSaFL2LLJ.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_019919_png.rf.8RdgRpVLBiq6jtHEggF5.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_021421_png.rf.5ZDKgeUANHqxCCDnMlNB.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_025625_png.rf.BLh54SO7M4iWxbODIBqM.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_025775_png.rf.36M6MpOCEI6ZiBureQVp.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cv_datasets/LentaTechPriceTags.yolov8_v1/train/labels/frame_025875_png.rf.728GkRredFPZ1KCbyUEl.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/detect_price_tags.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/extract_for_roboflow.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/split_dataset.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/stage1_filter.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/targets/43_15.csv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/train_price_tag.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/videos/26_12-20.mp4" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/videos/43_15.mp4" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 6
+}]]></component>
+  <component name="ProjectId" id="3DcsgI3jc6HMjqgT4cDjFikmPWI" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.detect_price_tags.executor": "Run",
+    "Python.train_price_tag.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/Users/a1234/PycharmProjects/lenta_cv/cv_datasets",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/cv_datasets" />
+      <recent name="$PROJECT_DIR$/videos" />
+      <recent name="$PROJECT_DIR$/targets" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.detect_price_tags">
+    <configuration name="detect_price_tags" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="lenta_cv" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/detect_price_tags.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="train_price_tag" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="lenta_cv" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/train_price_tag.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.detect_price_tags" />
+        <item itemvalue="Python.train_price_tag" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-1d06a55b98c1-74d2a5396914-JavaScript-PY-241.14494.241" />
+        <option value="bundled-python-sdk-0509580d9d50-28c9f5db9ffe-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-241.14494.241" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="" />
+      <created>1778592802055</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1778592802055</updated>
+      <workItem from="1778592803397" duration="9030000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778616900404" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/lenta_cv$train_price_tag.coverage" NAME="train_price_tag Coverage Results" MODIFIED="1778616159369" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>
