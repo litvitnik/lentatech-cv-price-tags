@@ -296,6 +296,7 @@ class PriceTagPipeline:
 
         keyframes = self.warp_price_tags(keyframes)
         keyframes = self.detect_qr_on_warped(keyframes)
+        keyframes = self.normalize_orientation(keyframes)  # <-- вот здесь
         keyframes = self.run_ocr_on_tags(keyframes)
 
         if debug:
@@ -307,40 +308,37 @@ class PriceTagPipeline:
         filename = os.path.basename(video_path)
         for kf in keyframes:
             ts = kf['timestamp_ms']
-            for tag in kf.get('price_tags', []): # основной цикл
+            for tag in kf.get('price_tags', []): #основной цикл
                 corners = tag['corners']
                 x_min = int(min(c[0] for c in corners))
                 y_min = int(min(c[1] for c in corners))
                 x_max = int(max(c[0] for c in corners))
                 y_max = int(max(c[1] for c in corners))
 
-                # Берём выпрямленное изображение и определяем цвет
                 warped = tag.get('warped')
                 color = self.detect_color(warped) if warped is not None else 'unknown'
 
+                # Полный сырой текст для отладки
                 ocr_lines = tag.get('ocr_text', [])
                 raw_text = ' '.join([line['text'] for line in ocr_lines])
 
-                # Простейшее извлечение цен и скидок
-                prices = re.findall(r'\b\d{1,6}[.,]\d{2}\b', raw_text)
-                price_default = prices[0].replace(',', '.') if prices else ''
-                price_card = prices[1].replace(',', '.') if len(prices) > 1 else ''
-                discount_match = re.search(r'(\d+)\s*%', raw_text)
-                discount_amount = discount_match.group(1) + '%' if discount_match else ''
+                # Парсим поля с учётом цвета и расположения
+                fields = self.parse_price_tag_fields(tag)
+                # fields уже содержит product_name, price_default, price_card, price_discount, discount_amount
 
                 record = {
                     'filename': filename,
-                    'product_name': raw_text,
-                    'price_default': price_default,
-                    'price_card': price_card,
-                    'price_discount': '',
+                    'product_name': fields['product_name'],
+                    'price_default': fields['price_default'],
+                    'price_card': fields['price_card'],
+                    'price_discount': fields['price_discount'],
                     'barcode': tag.get('qr_data', ''),
-                    'discount_amount': discount_amount,
+                    'discount_amount': fields['discount_amount'],
                     'id_sku': '',
                     'print_datetime': '',
                     'code': '',
                     'additional_info': '',
-                    'color': color,                     # <-- теперь здесь реальный цвет
+                    'color': color,
                     'special_symbols': '',
                     'frame_timestamp': ts,
                     'x_min': x_min,
@@ -348,6 +346,7 @@ class PriceTagPipeline:
                     'x_max': x_max,
                     'y_max': y_max,
                     'warped_image': tag.get('warped_image_path', ''),
+                    'raw_text': raw_text,  # <-- новое поле
                 }
                 records.append(record)
         df = pd.DataFrame(records)
@@ -356,7 +355,7 @@ class PriceTagPipeline:
             'filename', 'product_name', 'price_default', 'price_card', 'price_discount',
             'barcode', 'discount_amount', 'id_sku', 'print_datetime', 'code',
             'additional_info', 'color', 'special_symbols', 'frame_timestamp',
-            'x_min', 'y_min', 'x_max', 'y_max', 'warped_image'
+            'x_min', 'y_min', 'x_max', 'y_max', 'warped_image', 'raw_text'
         ]
         for col in columns:
             if col not in df.columns:
@@ -364,6 +363,132 @@ class PriceTagPipeline:
         df = df[columns]
         df.to_csv(csv_path, index=False, encoding='utf-8')
         print(f"CSV сохранён: {csv_path} (строк: {len(records)})")
+        return keyframes
+
+
+    # -------------------- Парсим ценник сам --------------------
+    def parse_price_tag_fields(self, tag: Dict) -> Dict:
+        """
+        Извлекает из tag структурированные поля на основе OCR, цвета и QR.
+        Возвращает словарь с ключами:
+            product_name, price_default, price_card, price_discount, discount_amount
+        """
+        ocr_lines = tag.get('ocr_text', [])
+        qr_bbox = tag.get('qr_bbox')  # список точек [[x,y],...] в координатах warped
+        color = tag.get('color', 'unknown')
+        warped = tag.get('warped')
+        h, w = warped.shape[:2] if warped is not None else (0, 0)
+
+        # Определяем примерную границу между названием и ценами (по QR)
+        split_x = w * 0.5  # по умолчанию середина
+        if qr_bbox:
+            # qr_bbox – четыре угла QR-кода
+            xs = [p[0] for p in qr_bbox]
+            qr_left = min(xs)
+            split_x = qr_left - 20  # чуть левее QR
+
+        # Разделяем строки на "левые" (название) и "правые" (цены)
+        left_lines = []
+        right_lines = []
+        for line in ocr_lines:
+            bbox = line['bbox']  # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+            center_x = sum(p[0] for p in bbox) / 4
+            if center_x < split_x:
+                left_lines.append(line)
+            else:
+                right_lines.append(line)
+
+        # product_name – склеиваем текст левых строк
+        product_name = ' '.join([l['text'] for l in left_lines]).strip()
+
+        # Извлекаем все цены из правых строк
+        price_candidates = []
+        for line in right_lines:
+            text = line['text']
+            bbox = line['bbox']
+            height = max(p[1] for p in bbox) - min(p[1] for p in bbox)
+            matches = re.finditer(r'\b\d{1,6}[.,]\d{2}\b', text)
+            for m in matches:
+                price_candidates.append({
+                    'value': m.group().replace(',', '.'),
+                    'height': height,
+                    'bbox': bbox,
+                    'text': text
+                })
+
+        # Сортируем по высоте (размер шрифта)
+        price_candidates.sort(key=lambda x: x['height'], reverse=True)
+
+        # Инициализация
+        price_default = ''
+        price_card = ''
+        price_discount = ''
+        discount_amount = ''
+
+        if color == 'red':
+            # Красный ценник: самая крупная цена – цена со скидкой, следующая – обычная
+            if len(price_candidates) >= 1:
+                price_discount = price_candidates[0]['value']
+            if len(price_candidates) >= 2:
+                price_default = price_candidates[1]['value']
+            # Ищем скидку в круге: строка с % в левой верхней части ценника (не среди цен)
+            for line in left_lines + right_lines:
+                text = line['text']
+                if '%' in text:
+                    # грубо проверяем, что это отдельная строка с процентом (например, "-20%")
+                    percent_match = re.search(r'(\d+)\s*%', text)
+                    if percent_match:
+                        # убедимся, что она не совпадает с ценой (не содержит точку)
+                        if '.' not in text and ',' not in text:
+                            discount_amount = percent_match.group(1) + '%'
+                            break
+
+        elif color == 'yellow':
+            # Жёлтый ценник: цена по карте — самая правая (ближе к QR), остальные обычные
+            if len(price_candidates) > 0:
+                # Сортируем по X-координате (ближе к правому краю)
+                price_candidates.sort(key=lambda x: max(p[0] for p in x['bbox']), reverse=True)
+                price_card = price_candidates[0]['value']
+                if len(price_candidates) > 1:
+                    price_default = price_candidates[1]['value']
+        else:
+            # Белый/неизвестный: первая цена – default, вторая – card (если есть)
+            if len(price_candidates) > 0:
+                price_default = price_candidates[0]['value']
+            if len(price_candidates) > 1:
+                price_card = price_candidates[1]['value']
+
+        return {
+            'product_name': product_name,
+            'price_default': price_default,
+            'price_card': price_card,
+            'price_discount': price_discount,
+            'discount_amount': discount_amount
+        }
+
+    # -------------------- Нормализуем ориентацию --------------------
+    def normalize_orientation(self, keyframes: List[Dict]) -> List[Dict]:
+        """
+        Если выпрямленный ценник имеет высоту > ширины, поворачивает его на 90°,
+        чтобы текст всегда был горизонтальным. Пересчитывает qr_bbox.
+        """
+        print("Нормализация ориентации ценников...")
+        for kf in keyframes:
+            for tag in kf.get('price_tags', []):
+                warped = tag.get('warped')
+                if warped is None:
+                    continue
+                h, w = warped.shape[:2]
+                if h > w:
+                    # Поворачиваем на 90° против часовой (текст станет горизонтальным)
+                    tag['warped'] = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                    # Обновляем координаты QR-кода, если есть
+                    if tag.get('qr_bbox') is not None:
+                        pts = np.array(tag['qr_bbox'])
+                        # Преобразование: (x,y) -> (y, w-1-x) для поворота против часовой
+                        pts[:, [0, 1]] = pts[:, [1, 0]]  # меняем местами
+                        pts[:, 0] = w - 1 - pts[:, 0]  # отражаем по горизонтали
+                        tag['qr_bbox'] = pts.tolist()
         return keyframes
 
     # -------------------- HTML-ОТЧЁТ --------------------

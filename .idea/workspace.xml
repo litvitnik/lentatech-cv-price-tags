@@ -4,45 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="рабочая версия">
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Определяем цвет">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_000000.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002005.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002105.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002256.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002506.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002657.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002707.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_002757.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003008.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003158.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003258.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003509.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003659.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003709.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_003760.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_004361.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames/frame_004411.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002105.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002205.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002306.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002406.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002456.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002807.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_002957.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003208.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003308.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003409.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003459.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003509.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003559.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003709.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003760.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003810.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_003860.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_004211.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_004261.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug_output/good_frames_processed/frame_004361.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/detect_price_tags.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -162,7 +125,7 @@
       <option name="presentableId" value="Default" />
       <updated>1778592802055</updated>
       <workItem from="1778592803397" duration="11336000" />
-      <workItem from="1778680487148" duration="5439000" />
+      <workItem from="1778680487148" duration="7417000" />
     </task>
     <task id="LOCAL-00001" summary="stages 1 and 2">
       <option name="closed" value="true" />
@@ -188,7 +151,15 @@
       <option name="project" value="LOCAL" />
       <updated>1778682926186</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Определяем цвет">
+      <option name="closed" value="true" />
+      <created>1778699276537</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1778699276537</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -198,10 +169,11 @@
     <MESSAGE value="stages 1 and 2" />
     <MESSAGE value="фулл пайплайн" />
     <MESSAGE value="рабочая версия" />
-    <option name="LAST_COMMIT_MESSAGE" value="рабочая версия" />
+    <MESSAGE value="Определяем цвет" />
+    <option name="LAST_COMMIT_MESSAGE" value="Определяем цвет" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778684563761" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778700689566" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/lenta_cv$train_price_tag.coverage" NAME="train_price_tag Coverage Results" MODIFIED="1778616159369" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
