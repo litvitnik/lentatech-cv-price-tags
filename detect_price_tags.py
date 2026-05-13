@@ -160,10 +160,10 @@ class PriceTagPipeline:
 
     # -------------------- ЭТАП 4: OCR --------------------
     def run_ocr_on_tags(self, keyframes: List[Dict]) -> List[Dict]:
-        """Распознаёт текст на выпрямленных ценниках."""
         if self.ocr is None:
             print("Загружаю PaddleOCR (русский)...")
-            self.ocr = PaddleOCR(lang='ru', use_angle_cls=True)
+            # убрали use_angle_cls, теперь use_textline_orientation
+            self.ocr = PaddleOCR(lang='ru', use_textline_orientation=True)
         print("Этап 4: распознавание текста...")
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
@@ -171,16 +171,25 @@ class PriceTagPipeline:
                 if warped is None:
                     tag['ocr_text'] = []
                     continue
-                result = self.ocr.ocr(warped, cls=False)
+                # Новый API: predict вместо ocr, без cls
+                result = self.ocr.predict(warped)
                 lines = []
-                if result[0]:
-                    for line_info in result[0]:
-                        bbox, (text, confidence) = line_info
-                        lines.append({
-                            'bbox': bbox,
-                            'text': text,
-                            'conf': confidence
-                        })
+                if result and len(result) > 0:
+                    res = result[0]  # одно изображение
+                    if isinstance(res, dict) and 'rec_texts' in res:
+                        rec_texts = res['rec_texts']
+                        rec_scores = res.get('rec_scores', [])
+                        dt_polys = res.get('dt_polys', [])
+                        for i, text in enumerate(rec_texts):
+                            conf = rec_scores[i] if i < len(rec_scores) else 0.0
+                            bbox = dt_polys[i] if i < len(dt_polys) else [[0, 0], [0, 0], [0, 0], [0, 0]]
+                            lines.append({'bbox': bbox, 'text': text, 'conf': conf})
+                    else:
+                        # на случай, если структура иная, пытаемся итерировать
+                        for item in res:
+                            if isinstance(item, (list, tuple)) and len(item) == 2:
+                                bbox, (text, conf) = item
+                                lines.append({'bbox': bbox, 'text': text, 'conf': conf})
                 tag['ocr_text'] = lines
         return keyframes
 
