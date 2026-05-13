@@ -36,12 +36,14 @@ class PriceTagPipeline:
 
     # -------------------- ЭТАП 1 --------------------
     def extract_keyframes(self, video_path: str, max_frames: int = 50) -> List[Dict]:
-        """Возвращает список keyframes с полями timestamp_ms, image, sharpness."""
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise IOError(f"Не удалось открыть видео: {video_path}")
 
         fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps == 0:
+            fps = 30  # fallback, если видео не сообщает FPS
+
         keyframes = []
         last_gray = None
         frame_idx = 0
@@ -50,7 +52,7 @@ class PriceTagPipeline:
             ret, frame = cap.read()
             if not ret:
                 break
-            timestamp_ms = int((frame_idx / fps) * 1000) if fps > 0 else frame_idx * 40
+            timestamp_ms = int((frame_idx / fps) * 1000)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
@@ -369,99 +371,88 @@ class PriceTagPipeline:
     # -------------------- Парсим ценник сам --------------------
     def parse_price_tag_fields(self, tag: Dict) -> Dict:
         """
-        Извлекает из tag структурированные поля на основе OCR, цвета и QR.
-        Возвращает словарь с ключами:
-            product_name, price_default, price_card, price_discount, discount_amount
+        Извлекает структурированные поля с учётом точной геометрии ценника.
+        Изображение должно быть нормализовано (горизонтальный текст).
         """
         ocr_lines = tag.get('ocr_text', [])
-        qr_bbox = tag.get('qr_bbox')  # список точек [[x,y],...] в координатах warped
+        qr_bbox = tag.get('qr_bbox')
         color = tag.get('color', 'unknown')
         warped = tag.get('warped')
         h, w = warped.shape[:2] if warped is not None else (0, 0)
 
-        # Определяем примерную границу между названием и ценами (по QR)
-        split_x = w * 0.5  # по умолчанию середина
+        # Граница между белой (верх) и цветной (низ) частями
+        split_y = int(h * 0.65)  # верхние 65% – белая часть
+
+        # Разделяем строки по Y-центру
+        top_lines = [l for l in ocr_lines if (sum(p[1] for p in l['bbox']) / 4) < split_y]
+        bottom_lines = [l for l in ocr_lines if (sum(p[1] for p in l['bbox']) / 4) >= split_y]
+
+        # --- Верхняя часть ---
+        # Название: левая половина верхней части
+        left_top = [l for l in top_lines if (sum(p[0] for p in l['bbox']) / 4) < w / 2]
+        product_name = ' '.join([l['text'] for l in left_top]).strip()
+
+        # Цена без скидки (price_default): правая половина верхней части, под QR
+        right_top = [l for l in top_lines if (sum(p[0] for p in l['bbox']) / 4) >= w / 2]
         if qr_bbox:
-            # qr_bbox – четыре угла QR-кода
-            xs = [p[0] for p in qr_bbox]
-            qr_left = min(xs)
-            split_x = qr_left - 20  # чуть левее QR
+            qr_bottom = max(p[1] for p in qr_bbox)
+            candidates = [l for l in right_top if (sum(p[1] for p in l['bbox']) / 4) > qr_bottom]
+            if not candidates:
+                candidates = right_top
+        else:
+            candidates = right_top
 
-        # Разделяем строки на "левые" (название) и "правые" (цены)
-        left_lines = []
-        right_lines = []
-        for line in ocr_lines:
-            bbox = line['bbox']  # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-            center_x = sum(p[0] for p in bbox) / 4
-            if center_x < split_x:
-                left_lines.append(line)
-            else:
-                right_lines.append(line)
-
-        # product_name – склеиваем текст левых строк
-        product_name = ' '.join([l['text'] for l in left_lines]).strip()
-
-        # Извлекаем все цены из правых строк
-        price_candidates = []
-        for line in right_lines:
-            text = line['text']
-            bbox = line['bbox']
-            height = max(p[1] for p in bbox) - min(p[1] for p in bbox)
-            matches = re.finditer(r'\b\d{1,6}[.,]\d{2}\b', text)
-            for m in matches:
-                price_candidates.append({
-                    'value': m.group().replace(',', '.'),
-                    'height': height,
-                    'bbox': bbox,
-                    'text': text
-                })
-
-        # Сортируем по высоте (размер шрифта)
-        price_candidates.sort(key=lambda x: x['height'], reverse=True)
-
-        # Инициализация
+        # Извлекаем цены из кандидатов (ищем числа вида xxx.xx)
         price_default = ''
-        price_card = ''
+        for line in candidates:
+            matches = re.findall(r'\b\d{1,6}[.,]\d{2}\b', line['text'])
+            if matches:
+                # Берём первую найденную (обычно она там одна)
+                price_default = matches[0].replace(',', '.')
+                break
+
+        # --- Нижняя часть ---
         price_discount = ''
         discount_amount = ''
-
         if color == 'red':
-            # Красный ценник: самая крупная цена – цена со скидкой, следующая – обычная
-            if len(price_candidates) >= 1:
-                price_discount = price_candidates[0]['value']
-            if len(price_candidates) >= 2:
-                price_default = price_candidates[1]['value']
-            # Ищем скидку в круге: строка с % в левой верхней части ценника (не среди цен)
-            for line in left_lines + right_lines:
-                text = line['text']
-                if '%' in text:
-                    # грубо проверяем, что это отдельная строка с процентом (например, "-20%")
-                    percent_match = re.search(r'(\d+)\s*%', text)
-                    if percent_match:
-                        # убедимся, что она не совпадает с ценой (не содержит точку)
-                        if '.' not in text and ',' not in text:
-                            discount_amount = percent_match.group(1) + '%'
+            # Скидка в круге: левая половина нижней части, содержит '%'
+            left_bottom = [l for l in bottom_lines if (sum(p[0] for p in l['bbox']) / 4) < w / 2]
+            discount_text = ''
+            for line in left_bottom:
+                if '%' in line['text']:
+                    pm = re.search(r'(\d+)\s*%', line['text'])
+                    if pm and '.' not in line['text'] and ',' not in line['text']:
+                        discount_text = pm.group(1) + '%'
+                        break
+            if not discount_text:  # fallback: искать во всей нижней части
+                for line in bottom_lines:
+                    if '%' in line['text']:
+                        pm = re.search(r'(\d+)\s*%', line['text'])
+                        if pm and '.' not in line['text'] and ',' not in line['text']:
+                            discount_text = pm.group(1) + '%'
                             break
+            discount_amount = discount_text
 
-        elif color == 'yellow':
-            # Жёлтый ценник: цена по карте — самая правая (ближе к QR), остальные обычные
-            if len(price_candidates) > 0:
-                # Сортируем по X-координате (ближе к правому краю)
-                price_candidates.sort(key=lambda x: max(p[0] for p in x['bbox']), reverse=True)
-                price_card = price_candidates[0]['value']
-                if len(price_candidates) > 1:
-                    price_default = price_candidates[1]['value']
-        else:
-            # Белый/неизвестный: первая цена – default, вторая – card (если есть)
-            if len(price_candidates) > 0:
-                price_default = price_candidates[0]['value']
-            if len(price_candidates) > 1:
-                price_card = price_candidates[1]['value']
+            # Цена со скидкой: правая половина нижней части, крупный шрифт
+            right_bottom = [l for l in bottom_lines if (sum(p[0] for p in l['bbox']) / 4) >= w / 2]
+            best_price = None
+            best_height = 0
+            for line in right_bottom:
+                bbox = line['bbox']
+                height = max(p[1] for p in bbox) - min(p[1] for p in bbox)
+                matches = re.findall(r'\b\d{1,6}[.,]\d{2}\b', line['text'])
+                for m in matches:
+                    if height > best_height:
+                        best_height = height
+                        best_price = m.replace(',', '.')
+            price_discount = best_price or ''
+
+        # Для жёлтых и белых ценников цены уже не заполняем (можно позже добавить logic)
 
         return {
             'product_name': product_name,
             'price_default': price_default,
-            'price_card': price_card,
+            'price_card': '',  # пока не используется
             'price_discount': price_discount,
             'discount_amount': discount_amount
         }
