@@ -20,14 +20,19 @@ from pyzbar.pyzbar import decode as pyzbar_decode
 class PriceTagPipeline:
     def __init__(self,
                  detection_model_path: str = "yolov8n.pt",
+                 orientation_mode: str = "color",
                  laplacian_thr: float = 100,
                  ssim_thr: float = 0.95):
         """
         Инициализация всех моделей.
         :param detection_model_path: путь к весам YOLO (.pt)
+        :param orientation_mode: "color" (по умолчанию, цветная часть снизу) или "aspect" (ширина > высоты)
         :param laplacian_thr: порог дисперсии Лапласиана (резкость)
         :param ssim_thr: порог структурного сходства для дедупликации
         """
+        if orientation_mode not in ("color", "aspect"):
+            raise ValueError(f"orientation_mode должен быть 'color' или 'aspect', получено: {orientation_mode}")
+        self.orientation_mode = orientation_mode
         self.laplacian_thr = laplacian_thr
         self.ssim_thr = ssim_thr
         print(f"Загружаю модель детекции: {detection_model_path}")
@@ -533,11 +538,86 @@ class PriceTagPipeline:
 
     # -------------------- Нормализуем ориентацию --------------------
     def normalize_orientation(self, keyframes: List[Dict]) -> List[Dict]:
+        """Диспетчер: выбирает режим нормализации ориентации."""
+        if self.orientation_mode == "color":
+            return self._normalize_by_color(keyframes)
+        else:
+            return self._normalize_by_aspect(keyframes)
+
+    def _normalize_by_color(self, keyframes: List[Dict]) -> List[Dict]:
         """
-        Если выпрямленный ценник имеет высоту > ширины, поворачивает его на 90°,
-        чтобы текст всегда был горизонтальным. Пересчитывает qr_bbox.
+        Ориентирует ценник так, чтобы цветная (красная/жёлтая) часть была снизу.
+        Алгоритм: строит маски красного и жёлтого для каждой из 4 ориентаций
+        и выбирает ту, где цветных пикселей в нижней половине больше всего.
         """
-        print("Нормализация ориентации ценников...")
+        print("Нормализация ориентации ценников (по цвету)...")
+
+        def color_score(img: np.ndarray) -> float:
+            """Разница: доля цвета снизу минус доля цвета сверху.
+            Положительное значение = цвет снизу, бело сверху."""
+            h, w = img.shape[:2]
+            if h < 4 or w < 4:
+                return 0.0
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            red_mask = cv2.bitwise_or(
+                cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255])),
+                cv2.inRange(hsv, np.array([160, 70, 50]), np.array([180, 255, 255]))
+            )
+            yellow_mask = cv2.inRange(hsv, np.array([20, 70, 50]), np.array([35, 255, 255]))
+            color_mask = cv2.bitwise_or(red_mask, yellow_mask)
+            top_half = color_mask[:h // 2, :]
+            bottom_half = color_mask[h // 2:, :]
+            top_score = cv2.countNonZero(top_half) / max(top_half.size, 1)
+            bot_score = cv2.countNonZero(bottom_half) / max(bottom_half.size, 1)
+            return bot_score - top_score
+
+        for kf in keyframes:
+            for tag in kf.get('price_tags', []):
+                if tag.get('_duplicate', False):
+                    continue
+                warped = tag.get('warped')
+                if warped is None:
+                    continue
+
+                h, w = warped.shape[:2]
+                if h == 0 or w == 0:
+                    continue
+
+                # 4 варианта ориентации: оригинал, 90 CW, 180, 90 CCW
+                variants = {
+                    0: warped,
+                    1: cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE),
+                    2: cv2.rotate(warped, cv2.ROTATE_180),
+                    3: cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                }
+
+                best_rot = 0
+                best_score = float('-inf')
+                for rot, img in variants.items():
+                    score = color_score(img)
+                    if score > best_score:
+                        best_score = score
+                        best_rot = rot
+
+                if best_rot != 0:
+                    tag['warped'] = variants[best_rot]
+                    # Обновляем координаты QR-кода
+                    if tag.get('qr_bbox') is not None:
+                        pts = np.array(tag['qr_bbox'])
+                        for _ in range(best_rot):
+                            # Повернуть на 90° CW: (x,y) -> (h-1-y, x)
+                            old = pts.copy()
+                            pts[:, 0] = h - 1 - old[:, 1]
+                            pts[:, 1] = old[:, 0]
+                            h, w = w, h
+                        tag['qr_bbox'] = pts.tolist()
+        return keyframes
+
+    def _normalize_by_aspect(self, keyframes: List[Dict]) -> List[Dict]:
+        """
+        Если выпрямленный ценник имеет высоту > ширины, поворачивает его на 90°.
+        """
+        print("Нормализация ориентации ценников (по соотношению сторон)...")
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
                 if tag.get('_duplicate', False):
@@ -547,14 +627,11 @@ class PriceTagPipeline:
                     continue
                 h, w = warped.shape[:2]
                 if h > w:
-                    # Поворачиваем на 90° против часовой (текст станет горизонтальным)
                     tag['warped'] = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                    # Обновляем координаты QR-кода, если есть
                     if tag.get('qr_bbox') is not None:
                         pts = np.array(tag['qr_bbox'])
-                        # Преобразование: (x,y) -> (y, w-1-x) для поворота против часовой
-                        pts[:, [0, 1]] = pts[:, [1, 0]]  # меняем местами
-                        pts[:, 0] = w - 1 - pts[:, 0]  # отражаем по горизонтали
+                        pts[:, [0, 1]] = pts[:, [1, 0]]
+                        pts[:, 0] = w - 1 - pts[:, 0]
                         tag['qr_bbox'] = pts.tolist()
         return keyframes
 
@@ -735,6 +812,7 @@ class PriceTagPipeline:
 if __name__ == "__main__":
     pipeline = PriceTagPipeline(
         detection_model_path='runs/detect/runs/detect/price_tag_v1/weights/best.pt',
+        orientation_mode='color',   # "color" (цветная часть снизу, по умолч.) или "aspect" (ширина > высоты)
         laplacian_thr=100   # порог чёткости, можно менять
     )
     pipeline.run_to_csv(
