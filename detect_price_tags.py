@@ -20,27 +20,18 @@ from pyzbar.pyzbar import decode as pyzbar_decode
 class PriceTagPipeline:
     def __init__(self,
                  detection_model_path: str = "yolov8n.pt",
-                 detection_mode: str = "color",
                  laplacian_thr: float = 100,
                  ssim_thr: float = 0.95):
         """
-        Инициализация пайплайна.
-        :param detection_model_path: путь к весам YOLO (.pt) — нужен только при detection_mode="yolo"
-        :param detection_mode: "color" (по умолчанию, без обученной модели) или "yolo" (обученная модель)
+        Инициализация всех моделей.
+        :param detection_model_path: путь к весам YOLO (.pt)
         :param laplacian_thr: порог дисперсии Лапласиана (резкость)
         :param ssim_thr: порог структурного сходства для дедупликации
         """
-        if detection_mode not in ("color", "yolo"):
-            raise ValueError(f"detection_mode должен быть 'color' или 'yolo', получено: {detection_mode}")
-        self.detection_mode = detection_mode
         self.laplacian_thr = laplacian_thr
         self.ssim_thr = ssim_thr
-        self.detector = None
-        if self.detection_mode == "yolo":
-            print(f"Загружаю модель детекции: {detection_model_path}")
-            self.detector = YOLO(detection_model_path)
-        else:
-            print("Режим детекции: цветовой (без обученной модели)")
+        print(f"Загружаю модель детекции: {detection_model_path}")
+        self.detector = YOLO(detection_model_path)
         self.ocr = None
 
     # -------------------- ЭТАП 1 --------------------
@@ -94,15 +85,8 @@ class PriceTagPipeline:
 
     # -------------------- ЭТАП 2 --------------------
     def detect_price_tags_on_keyframes(self, keyframes: List[Dict]) -> List[Dict]:
-        """Диспетчер: выбирает метод детекции по self.detection_mode."""
-        if self.detection_mode == "color":
-            return self._detect_price_tags_color(keyframes)
-        else:
-            return self._detect_price_tags_yolo(keyframes)
-
-    def _detect_price_tags_yolo(self, keyframes: List[Dict]) -> List[Dict]:
-        """Детекция ценников через YOLO. Добавляет в каждый кадр поле 'price_tags'."""
-        print("Этап 2: детекция ценников (YOLO)...")
+        """Добавляет в каждый кадр поле 'price_tags' со списком детекций."""
+        print("Этап 2: детекция ценников...")
         for kf in keyframes:
             image = kf['image']
             results = self.detector(image, verbose=False)
@@ -119,173 +103,6 @@ class PriceTagPipeline:
                         "confidence": conf
                     })
             kf['price_tags'] = tags
-        return keyframes
-
-    # -------------------- ЭТАП 2b: ЦВЕТОВАЯ ДЕТЕКЦИЯ --------------------
-    @staticmethod
-    def _nms(boxes: List[tuple], iou_threshold: float = 0.3) -> List[tuple]:
-        """
-        Non-Maximum Suppression для слияния перекрывающихся bbox.
-        boxes: список кортежей (x1, y1, x2, y2, conf)
-        Возвращает отфильтрованный список.
-        """
-        if not boxes:
-            return []
-        # Сортируем по confidence (по убыванию)
-        boxes = sorted(boxes, key=lambda b: b[4], reverse=True)
-        keep = []
-
-        def iou(a, b):
-            x1 = max(a[0], b[0])
-            y1 = max(a[1], b[1])
-            x2 = min(a[2], b[2])
-            y2 = min(a[3], b[3])
-            inter = max(0, x2 - x1) * max(0, y2 - y1)
-            area_a = (a[2] - a[0]) * (a[3] - a[1])
-            area_b = (b[2] - b[0]) * (b[3] - b[1])
-            union = area_a + area_b - inter
-            return inter / union if union > 0 else 0
-
-        while boxes:
-            best = boxes.pop(0)
-            keep.append(best)
-            boxes = [b for b in boxes if iou(best, b) < iou_threshold]
-
-        return keep
-
-    def _detect_price_tags_color(self, keyframes: List[Dict],
-                                  min_area: int = 500,
-                                  min_tag_aspect: float = 0.25,
-                                  max_tag_aspect: float = 4.0,
-                                  nms_iou: float = 0.3,
-                                  white_top_ratio: float = 0.15,
-                                  color_bottom_ratio: float = 0.10,
-                                  scale: int = 4) -> List[Dict]:
-        """
-        Детекция ценников по цветовому признаку (без обученной модели).
-        Работает на уменьшенной копии кадра для устойчивости к шуму.
-
-        :param min_area: минимальная площадь цветного контура (на уменьшенном изображении)
-        :param min_tag_aspect: минимальный aspect ratio итогового bbox
-        :param max_tag_aspect: максимальный aspect ratio итогового bbox
-        :param nms_iou: порог IoU для NMS
-        :param white_top_ratio: минимальная доля белых пикселей в верхней половине
-        :param color_bottom_ratio: минимальная доля цветных пикселей в нижней половине
-        :param scale: фактор уменьшения изображения (4 = кадр 4K → ~960x540)
-        """
-        print("Этап 2: детекция ценников (цветовой признак)...")
-
-        kern_small = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        kern_big = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-
-        for kf in keyframes:
-            image = kf['image']
-            h_img, w_img = image.shape[:2]
-
-            # Уменьшаем изображение для устойчивости
-            small = cv2.resize(image, (w_img // scale, h_img // scale))
-            sh, sw = small.shape[:2]
-            hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
-
-            # --- Маски ---
-            white_mask = cv2.inRange(hsv, np.array([0, 0, 200]), np.array([180, 50, 255]))
-            red_mask = cv2.bitwise_or(
-                cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255])),
-                cv2.inRange(hsv, np.array([160, 70, 50]), np.array([180, 255, 255]))
-            )
-            yellow_mask = cv2.inRange(hsv, np.array([20, 70, 50]), np.array([35, 255, 255]))
-            color_mask = cv2.bitwise_or(red_mask, yellow_mask)
-
-            color_mask = cv2.morphologyEx(color_mask, cv2.MORPH_CLOSE, kern_big)
-            color_mask = cv2.morphologyEx(color_mask, cv2.MORPH_OPEN, kern_small)
-            white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kern_small)
-            white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kern_small)
-
-            # --- Контуры цветных регионов ---
-            contours, _ = cv2.findContours(color_mask, cv2.RETR_EXTERNAL,
-                                           cv2.CHAIN_APPROX_SIMPLE)
-
-            raw_boxes = []
-            for cnt in contours:
-                x, y, bw, bh = cv2.boundingRect(cnt)
-                area = bw * bh
-
-                if area < min_area:
-                    continue
-
-                # Ищем белую зону над цветным контуром
-                expand = min(bh * 2, sh - y)
-                search_top = max(0, int(y - expand))
-                col_white = white_mask[search_top:y, x:x + bw]
-                white_rows = np.where(col_white.sum(axis=1) > max(bw * 0.05, 1))[0]
-                if len(white_rows) == 0:
-                    continue
-
-                tag_top = max(0, search_top + int(white_rows.min()))
-                max_top = y - bh * 2
-                if max_top > 0 and tag_top < max_top:
-                    tag_top = int(max_top)
-                tag_bottom = min(sh - 1, y + bh)
-                tag_left = max(0, x - 2)
-                tag_right = min(sw - 1, x + bw + 2)
-                tag_w = tag_right - tag_left + 1
-                tag_h = tag_bottom - tag_top + 1
-
-                if tag_w < 5 or tag_h < 5:
-                    continue
-
-                # Фильтр по aspect ratio итогового bbox
-                tag_aspect = tag_w / max(tag_h, 1)
-                if tag_aspect < min_tag_aspect or tag_aspect > max_tag_aspect:
-                    continue
-
-                mid_y = (tag_top + tag_bottom) // 2
-                bbox_white = white_mask[tag_top:tag_bottom + 1, tag_left:tag_right + 1]
-                bbox_color = color_mask[tag_top:tag_bottom + 1, tag_left:tag_right + 1]
-
-                top_half_area = (mid_y - tag_top) * tag_w
-                bottom_half_area = (tag_bottom - mid_y) * tag_w
-
-                if top_half_area == 0 or bottom_half_area == 0:
-                    continue
-
-                white_in_top = cv2.countNonZero(bbox_white[:mid_y - tag_top, :]) / top_half_area
-                color_in_bottom = cv2.countNonZero(bbox_color[mid_y - tag_top:, :]) / bottom_half_area
-
-                if white_in_top < white_top_ratio:
-                    continue
-                if color_in_bottom < color_bottom_ratio:
-                    continue
-
-                conf = min(white_in_top + color_in_bottom, 1.0)
-
-                # Масштабируем обратно к оригинальному размеру
-                raw_boxes.append((
-                    tag_left * scale, tag_top * scale,
-                    tag_right * scale, tag_bottom * scale,
-                    conf
-                ))
-
-            # NMS
-            kept = self._nms(raw_boxes, iou_threshold=nms_iou)
-
-            tags = []
-            for x1, y_top, x2, y_bottom, conf in kept:
-                # Ограничиваем координаты рамками оригинального изображения
-                x1 = min(x1, w_img - 1)
-                y_top = min(y_top, h_img - 1)
-                x2 = min(x2, w_img - 1)
-                y_bottom = min(y_bottom, h_img - 1)
-                tags.append({
-                    "corners": [[x1, y_top], [x2, y_top],
-                                [x2, y_bottom], [x1, y_bottom]],
-                    "confidence": round(conf, 3)
-                })
-
-            kf['price_tags'] = tags
-
-        total_tags = sum(len(kf['price_tags']) for kf in keyframes)
-        print(f"Этап 2 (цветовой): найдено {total_tags} ценников")
         return keyframes
 
     # -------------------- ЭТАП 3: ВЫРЕЗАНИЕ И ВЫПРЯМЛЕНИЕ --------------------
@@ -907,8 +724,7 @@ class PriceTagPipeline:
 # -------------------- Пример использования --------------------
 if __name__ == "__main__":
     pipeline = PriceTagPipeline(
-        detection_mode='color',  # "color" (по умолчанию, без модели) или "yolo" (обученная модель)
-        # detection_model_path='runs/detect/runs/detect/price_tag_v1/weights/best.pt',  # нужен только для yolo
+        detection_model_path='runs/detect/runs/detect/price_tag_v1/weights/best.pt',
         laplacian_thr=100   # порог чёткости, можно менять
     )
     pipeline.run_to_csv(
