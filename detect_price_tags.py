@@ -53,6 +53,7 @@ class PriceTagPipeline:
             if not ret:
                 break
             timestamp_ms = int((frame_idx / fps) * 1000)
+            # timestamp_ms = int(cap.get(cv2.CAP_PROP_POS_MSEC)) #потом вернемся сюда если надо
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()

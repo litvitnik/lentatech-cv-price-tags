@@ -4,8 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Развернули и пытаемся определить скидки и ценники">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Определяем таймштамп, но мб неверно">
       <change beforePath="$PROJECT_DIR$/detect_price_tags.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -125,7 +124,7 @@
       <option name="presentableId" value="Default" />
       <updated>1778592802055</updated>
       <workItem from="1778592803397" duration="11336000" />
-      <workItem from="1778680487148" duration="9512000" />
+      <workItem from="1778680487148" duration="9859000" />
     </task>
     <task id="LOCAL-00001" summary="stages 1 and 2">
       <option name="closed" value="true" />
@@ -167,7 +166,15 @@
       <option name="project" value="LOCAL" />
       <updated>1778701309536</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Определяем таймштамп, но мб неверно">
+      <option name="closed" value="true" />
+      <created>1778703675318</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1778703675318</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -179,7 +186,8 @@
     <MESSAGE value="рабочая версия" />
     <MESSAGE value="Определяем цвет" />
     <MESSAGE value="Развернули и пытаемся определить скидки и ценники" />
-    <option name="LAST_COMMIT_MESSAGE" value="Развернули и пытаемся определить скидки и ценники" />
+    <MESSAGE value="Определяем таймштамп, но мб неверно" />
+    <option name="LAST_COMMIT_MESSAGE" value="Определяем таймштамп, но мб неверно" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778703148133" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
