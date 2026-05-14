@@ -320,6 +320,7 @@ class PriceTagPipeline:
 
                 warped = tag.get('warped')
                 color = self.detect_color(warped) if warped is not None else 'unknown'
+                tag['color'] = color  # сохраняем цвет в тег для parse_price_tag_fields
 
                 # Полный сырой текст для отладки
                 ocr_lines = tag.get('ocr_text', [])
@@ -370,10 +371,48 @@ class PriceTagPipeline:
 
 
     # -------------------- Парсим ценник сам --------------------
+    @staticmethod
+    def _line_center_y(line: Dict) -> float:
+        """Y-координата центра строки OCR."""
+        return sum(p[1] for p in line['bbox']) / 4
+
+    @staticmethod
+    def _line_center_x(line: Dict) -> float:
+        """X-координата центра строки OCR."""
+        return sum(p[0] for p in line['bbox']) / 4
+
+    @staticmethod
+    def _line_height(line: Dict) -> float:
+        """Высота строки OCR в пикселях."""
+        return max(p[1] for p in line['bbox']) - min(p[1] for p in line['bbox'])
+
+    @staticmethod
+    def _extract_price(text: str) -> str:
+        """Ищет цену в тексте. Поддерживает форматы: 319.99, 319,99, 319 99, 319."""
+        # Сначала пытаемся найти цены с десятичной частью: 319.99, 319,99, 319 99
+        m = re.search(r'(\d{1,6})[.,\s](\d{2})\b', text)
+        if m:
+            return m.group(1) + '.' + m.group(2)
+        # Fallback: просто крупное число (цена без копеек, часто встречается в OCR)
+        m = re.search(r'\b(\d{2,6})\b', text)
+        if m:
+            return m.group(1) + '.00'
+        return ''
+
     def parse_price_tag_fields(self, tag: Dict) -> Dict:
         """
         Извлекает структурированные поля с учётом точной геометрии ценника.
         Изображение должно быть нормализовано (горизонтальный текст).
+
+        Структура ценника «Лента» (красный):
+        ┌────────────────────────────┐
+        │  Название продукта   QR-код│  ← белая часть (верхние ~55%)
+        │                  цена без │
+        │                  скидки   │
+        ├────────────────────────────┤
+        │  -30%           234.99 р. │  ← красная часть (нижние ~45%)
+        │  (круг)         (крупно)  │
+        └────────────────────────────┘
         """
         ocr_lines = tag.get('ocr_text', [])
         qr_bbox = tag.get('qr_bbox')
@@ -382,73 +421,99 @@ class PriceTagPipeline:
         h, w = warped.shape[:2] if warped is not None else (0, 0)
 
         # Граница между белой (верх) и цветной (низ) частями
-        split_y = int(h * 0.65)  # верхние 65% – белая часть
+        # У ценников Лента красная нижняя часть занимает ~40-45% высоты
+        split_y = int(h * 0.55)
 
         # Разделяем строки по Y-центру
-        top_lines = [l for l in ocr_lines if (sum(p[1] for p in l['bbox']) / 4) < split_y]
-        bottom_lines = [l for l in ocr_lines if (sum(p[1] for p in l['bbox']) / 4) >= split_y]
+        top_lines = [l for l in ocr_lines if self._line_center_y(l) < split_y]
+        bottom_lines = [l for l in ocr_lines if self._line_center_y(l) >= split_y]
 
         # --- Верхняя часть ---
         # Название: левая половина верхней части
-        left_top = [l for l in top_lines if (sum(p[0] for p in l['bbox']) / 4) < w / 2]
+        left_top = [l for l in top_lines if self._line_center_x(l) < w / 2]
         product_name = ' '.join([l['text'] for l in left_top]).strip()
 
-        # Цена без скидки (price_default): правая половина верхней части, под QR
-        right_top = [l for l in top_lines if (sum(p[0] for p in l['bbox']) / 4) >= w / 2]
+        # Цена без скидки (price_default): правая половина верхней части
+        # Обычно мелкими цифрами рядом с QR-кодом
+        right_top = [l for l in top_lines if self._line_center_x(l) >= w / 2]
         if qr_bbox:
             qr_bottom = max(p[1] for p in qr_bbox)
-            candidates = [l for l in right_top if (sum(p[1] for p in l['bbox']) / 4) > qr_bottom]
+            candidates = [l for l in right_top if self._line_center_y(l) > qr_bottom]
             if not candidates:
                 candidates = right_top
         else:
             candidates = right_top
 
-        # Извлекаем цены из кандидатов (ищем числа вида xxx.xx)
+        # Извлекаем цены из кандидатов
         price_default = ''
         for line in candidates:
-            matches = re.findall(r'\b\d{1,6}[.,]\d{2}\b', line['text'])
-            if matches:
-                # Берём первую найденную (обычно она там одна)
-                price_default = matches[0].replace(',', '.')
+            price = self._extract_price(line['text'])
+            if price:
+                price_default = price
                 break
 
-        # --- Нижняя часть ---
+        # --- Нижняя часть (только для цветных ценников) ---
         price_discount = ''
         discount_amount = ''
-        if color == 'red':
+
+        if color == 'red' and bottom_lines:
             # Скидка в круге: левая половина нижней части, содержит '%'
-            left_bottom = [l for l in bottom_lines if (sum(p[0] for p in l['bbox']) / 4) < w / 2]
+            left_bottom = [l for l in bottom_lines if self._line_center_x(l) < w / 2]
             discount_text = ''
+
             for line in left_bottom:
                 if '%' in line['text']:
-                    pm = re.search(r'(\d+)\s*%', line['text'])
-                    if pm and '.' not in line['text'] and ',' not in line['text']:
+                    pm = re.search(r'(-?\d+)\s*%', line['text'])
+                    if pm:
                         discount_text = pm.group(1) + '%'
                         break
-            if not discount_text:  # fallback: искать во всей нижней части
+
+            if not discount_text:
+                # Fallback: искать минус + число (OCR иногда видит «-30» без %)
+                for line in left_bottom:
+                    pm = re.search(r'(-?\d+)\s*%?', line['text'])
+                    if pm and pm.group(1):
+                        discount_text = pm.group(1) + '%'
+                        break
+
+            if not discount_text:
+                # Последний fallback: поиск по всей нижней части
                 for line in bottom_lines:
                     if '%' in line['text']:
-                        pm = re.search(r'(\d+)\s*%', line['text'])
-                        if pm and '.' not in line['text'] and ',' not in line['text']:
+                        pm = re.search(r'(-?\d+)\s*%', line['text'])
+                        if pm:
                             discount_text = pm.group(1) + '%'
                             break
+
             discount_amount = discount_text
 
             # Цена со скидкой: правая половина нижней части, крупный шрифт
-            right_bottom = [l for l in bottom_lines if (sum(p[0] for p in l['bbox']) / 4) >= w / 2]
+            right_bottom = [l for l in bottom_lines if self._line_center_x(l) >= w / 2]
             best_price = None
             best_height = 0
             for line in right_bottom:
-                bbox = line['bbox']
-                height = max(p[1] for p in bbox) - min(p[1] for p in bbox)
-                matches = re.findall(r'\b\d{1,6}[.,]\d{2}\b', line['text'])
-                for m in matches:
-                    if height > best_height:
-                        best_height = height
-                        best_price = m.replace(',', '.')
-            price_discount = best_price or ''
+                lh = self._line_height(line)
+                price = self._extract_price(line['text'])
+                if price and lh > best_height:
+                    best_height = lh
+                    best_price = price
 
-        # Для жёлтых и белых ценников цены уже не заполняем (можно позже добавить logic)
+            if best_price:
+                price_discount = best_price
+            elif right_bottom:
+                # Fallback: берём цену из любой строки справа снизу
+                for line in right_bottom:
+                    price = self._extract_price(line['text'])
+                    if price:
+                        price_discount = price
+                        break
+
+        # Для жёлтых и белых ценников — пробуем извлечь цену из всего текста
+        if color in ('yellow', 'unknown') and not price_default:
+            all_text = ' '.join([l['text'] for l in ocr_lines])
+            price = self._extract_price(all_text)
+            if price:
+                price_default = price
 
         return {
             'product_name': product_name,
