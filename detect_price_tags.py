@@ -112,6 +112,8 @@ class PriceTagPipeline:
         for kf in keyframes:
             image = kf['image']
             for tag in kf.get('price_tags', []):
+                if tag.get('_duplicate', False):
+                    continue
                 corners = np.array(tag['corners'], dtype=np.float32)
                 width = int(max(
                     np.linalg.norm(corners[1] - corners[0]),
@@ -141,6 +143,8 @@ class PriceTagPipeline:
         print("Этап 3.5: поиск QR-кодов...")
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
+                if tag.get('_duplicate', False):
+                    continue
                 warped = tag.get('warped')
                 if warped is None:
                     tag['qr_data'] = ''
@@ -294,6 +298,8 @@ class PriceTagPipeline:
         """Запускает все этапы и сохраняет CSV с распознанными данными."""
         keyframes = self.extract_keyframes(video_path, max_frames)
         keyframes = self.detect_price_tags_on_keyframes(keyframes)
+        keyframes = self.deduplicate_price_tags(keyframes)
+
         if debug:
             self.save_debug_frames(keyframes, debug_dir)
 
@@ -312,6 +318,8 @@ class PriceTagPipeline:
         for kf in keyframes:
             ts = kf['timestamp_ms']
             for tag in kf.get('price_tags', []): #основной цикл
+                if tag.get('_duplicate', False):
+                    continue
                 corners = tag['corners']
                 x_min = int(min(c[0] for c in corners))
                 y_min = int(min(c[1] for c in corners))
@@ -532,6 +540,8 @@ class PriceTagPipeline:
         print("Нормализация ориентации ценников...")
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
+                if tag.get('_duplicate', False):
+                    continue
                 warped = tag.get('warped')
                 if warped is None:
                     continue
