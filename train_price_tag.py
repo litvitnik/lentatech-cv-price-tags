@@ -2,23 +2,23 @@ from ultralytics import YOLO
 
 
 def main():
-    # 1. Загружаем предобученную nano-модель YOLOv8
-    model = YOLO('yolov8n.pt')
+    # 1. Загружаем текущую модель v1 как стартовую точку (fine-tune)
+    model = YOLO('runs/detect/runs/detect/price_tag_v1/weights/best.pt')
 
-    # 2. Запускаем обучение
+    # 2. Запускаем fine-tune на датасете v2
     results = model.train(
-        data='cv_datasets/LentaTechPriceTags.yolov8_v1/data.yaml',  # путь к вашему data.yaml
-        epochs=60,  # число эпох (можно начать с 60)
-        imgsz=640,  # размер входного изображения
-        batch=8,  # размер батча (если GPU с малым VRAM, уменьшите до 4)
-        device='mps',  # 'cuda' для GPU, 'cpu' если нет видеокарты
-        name='price_tag_v1',  # имя эксперимента
-        patience=10,  # ранняя остановка, если val loss не улучшается 10 эпох
-        lr0=0.01,  # начальный learning rate
-        augment=True,  # стандартные аугментации YOLO
-        workers=4,  # число потоков загрузки данных
-        project='runs/detect',  # папка для сохранения результатов
-        exist_ok=True,  # перезаписывать, если папка существует
+        data='cv_datasets/LentaTechPriceTags.yolov8_v2/data.yaml',
+        epochs=100,
+        imgsz=640,
+        batch=8,
+        device='mps',
+        name='price_tag_v2',
+        patience=15,
+        lr0=0.001,  # ниже чем при обучении с нуля — fine-tune
+        augment=True,
+        workers=4,
+        project='runs/detect',
+        exist_ok=True,
     )
 
     # 3. Метрики после обучения
@@ -28,9 +28,6 @@ def main():
     print(f"mAP@0.5:0.95: {metrics.box.map:.3f}")
     print(f"Precision: {metrics.box.mp:.3f}")
     print(f"Recall: {metrics.box.mr:.3f}")
-
-    # 4. Экспорт в формат для инференса (опционально)
-    model.export(format='onnx')  # можно будет использовать без Python
 
 
 if __name__ == '__main__':

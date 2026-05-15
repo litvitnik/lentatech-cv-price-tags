@@ -4,8 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Веб-приложение">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="новая модель">
+      <change afterPath="$PROJECT_DIR$/train_price_tag.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -255,7 +255,15 @@
       <option name="project" value="LOCAL" />
       <updated>1778875189681</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="новая модель">
+      <option name="closed" value="true" />
+      <created>1778876986330</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1778876986330</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -297,7 +305,9 @@
     <MESSAGE value="забыл уже что" />
     <MESSAGE value="track через модель" />
     <MESSAGE value="Веб-приложение" />
-    <option name="LAST_COMMIT_MESSAGE" value="Веб-приложение" />
+    <MESSAGE value="новая модель" />
+    <option name="LAST_COMMIT_MESSAGE" value="новая модель" />
+    <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778871444429" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
