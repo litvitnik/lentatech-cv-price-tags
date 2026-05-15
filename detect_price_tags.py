@@ -21,18 +21,21 @@ class PriceTagPipeline:
     def __init__(self,
                  detection_model_path: str = "yolov8n.pt",
                  orientation_mode: str = "color",
+                 assume_99_kopecks: bool = True,
                  laplacian_thr: float = 100,
                  ssim_thr: float = 0.95):
         """
         Инициализация всех моделей.
         :param detection_model_path: путь к весам YOLO (.pt)
         :param orientation_mode: "color" (по умолчанию, цветная часть снизу) или "aspect" (ширина > высоты)
+        :param assume_99_kopecks: заменять ли 00 копеек на 99 в ценах (по умолчанию True)
         :param laplacian_thr: порог дисперсии Лапласиана (резкость)
         :param ssim_thr: порог структурного сходства для дедупликации
         """
         if orientation_mode not in ("color", "aspect"):
             raise ValueError(f"orientation_mode должен быть 'color' или 'aspect', получено: {orientation_mode}")
         self.orientation_mode = orientation_mode
+        self.assume_99_kopecks = assume_99_kopecks
         self.laplacian_thr = laplacian_thr
         self.ssim_thr = ssim_thr
         print(f"Загружаю модель детекции: {detection_model_path}")
@@ -534,6 +537,13 @@ class PriceTagPipeline:
             price = self._extract_price(all_text)
             if price:
                 price_default = price
+
+        # Заменяем .00 на .99 если включено
+        if self.assume_99_kopecks:
+            if price_default.endswith('.00'):
+                price_default = price_default[:-3] + '.99'
+            if price_discount.endswith('.00'):
+                price_discount = price_discount[:-3] + '.99'
 
         return {
             'product_name': product_name,
