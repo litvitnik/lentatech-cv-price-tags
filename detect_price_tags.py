@@ -6,7 +6,7 @@ import numpy as np
 import re
 import base64
 from io import BytesIO
-from typing import List, Dict
+from typing import List, Dict, Callable, Optional
 
 import pandas as pd
 from tqdm import tqdm
@@ -217,7 +217,8 @@ class PriceTagPipeline:
         return keyframes
 
     # -------------------- ЭТАП 4: OCR --------------------
-    def run_ocr_on_tags(self, keyframes: List[Dict]) -> List[Dict]:
+    def run_ocr_on_tags(self, keyframes: List[Dict],
+                        progress_callback: Optional[Callable[[str, float], None]] = None) -> List[Dict]:
         """Распознаёт текст на выпрямленных ценниках с прогресс-баром."""
         if self.ocr is None:
             print("Загружаю PaddleOCR (русский)...")
@@ -232,8 +233,9 @@ class PriceTagPipeline:
                 else:
                     tag['ocr_text'] = []
 
-        print(f"Этап 4: распознавание текста на {len(tags_to_process)} ценниках...")
-        for tag in tqdm(tags_to_process, desc="OCR", unit="tag"):
+        total = len(tags_to_process)
+        print(f"Этап 4: распознавание текста на {total} ценниках...")
+        for i, tag in enumerate(tqdm(tags_to_process, desc="OCR", unit="tag")):
             warped = tag['warped']
             result = self.ocr.predict(warped)
             lines = []
@@ -253,6 +255,8 @@ class PriceTagPipeline:
                             bbox, (text, conf) = item
                             lines.append({'bbox': bbox, 'text': text, 'conf': conf})
             tag['ocr_text'] = lines
+            if progress_callback and total > 0:
+                progress_callback(f"OCR: {i + 1}/{total}", 0.55 + 0.35 * (i + 1) / total)
         return keyframes
 
     # -------------------- ВИЗУАЛЬНАЯ ОТЛАДКА --------------------
@@ -334,17 +338,30 @@ class PriceTagPipeline:
     # -------------------- ГЛАВНЫЙ МЕТОД --------------------
     def run_to_csv(self, video_path: str,
                    debug=True, debug_dir='debug_output',
-                   csv_path='output.csv') -> List[Dict]:
+                   csv_path='output.csv',
+                   progress_callback: Optional[Callable[[str, float], None]] = None) -> List[Dict]:
         """Запускает все этапы и сохраняет CSV с распознанными данными."""
+        def _progress(message: str, fraction: float):
+            print(f"[{fraction:.0%}] {message}")
+            if progress_callback:
+                progress_callback(message, fraction)
+
+        _progress("Трекинг ценников...", 0.0)
         keyframes = self.detect_and_track(video_path)
+        _progress(f"Найдено {len(keyframes)} кадров", 0.3)
 
         if debug:
             self.save_debug_frames(keyframes, debug_dir)
 
+        _progress("Вырезание ценников и поиск QR-кодов...", 0.35)
         keyframes = self.warp_price_tags(keyframes)
         keyframes = self.detect_qr_on_warped(keyframes)
-        keyframes = self.normalize_orientation(keyframes)  # <-- вот здесь
-        keyframes = self.run_ocr_on_tags(keyframes)
+
+        _progress("Нормализация ориентации...", 0.5)
+        keyframes = self.normalize_orientation(keyframes)
+
+        _progress("Распознавание текста (OCR)...", 0.55)
+        keyframes = self.run_ocr_on_tags(keyframes, progress_callback=progress_callback)
 
         if debug:
             self.save_warped_debug(keyframes, os.path.join(debug_dir, 'warped_tags'))
@@ -410,7 +427,7 @@ class PriceTagPipeline:
                 df[col] = ''
         df = df[columns]
         df.to_csv(csv_path, index=False, encoding='utf-8')
-        print(f"CSV сохранён: {csv_path} (строк: {len(records)})")
+        _progress(f"Готово: {len(records)} ценников", 1.0)
         return keyframes
 
 
