@@ -12,7 +12,6 @@ import pandas as pd
 from tqdm import tqdm
 from PIL import Image
 from ultralytics import YOLO
-from skimage.metrics import structural_similarity as ssim
 from paddleocr import PaddleOCR
 from pyzbar.pyzbar import decode as pyzbar_decode
 
@@ -22,95 +21,132 @@ class PriceTagPipeline:
                  detection_model_path: str = "yolov8n.pt",
                  orientation_mode: str = "color",
                  assume_99_kopecks: bool = True,
-                 laplacian_thr: float = 100,
-                 ssim_thr: float = 0.95):
+                 tracker: str = "botsort.yaml"):
         """
         Инициализация всех моделей.
         :param detection_model_path: путь к весам YOLO (.pt)
         :param orientation_mode: "color" (по умолчанию, цветная часть снизу) или "aspect" (ширина > высоты)
         :param assume_99_kopecks: заменять ли 00 копеек на 99 в ценах (по умолчанию True)
-        :param laplacian_thr: порог дисперсии Лапласиана (резкость)
-        :param ssim_thr: порог структурного сходства для дедупликации
+        :param tracker: трекер для model.track() ("botsort.yaml" или "bytetrack.yaml")
         """
         if orientation_mode not in ("color", "aspect"):
             raise ValueError(f"orientation_mode должен быть 'color' или 'aspect', получено: {orientation_mode}")
         self.orientation_mode = orientation_mode
         self.assume_99_kopecks = assume_99_kopecks
-        self.laplacian_thr = laplacian_thr
-        self.ssim_thr = ssim_thr
+        self.tracker = tracker
         print(f"Загружаю модель детекции: {detection_model_path}")
         self.detector = YOLO(detection_model_path)
         self.ocr = None
 
-    # -------------------- ЭТАП 1 --------------------
-    def extract_keyframes(self, video_path: str, max_frames: int = 50) -> List[Dict]:
+    # -------------------- ЭТАП 1+2: ТРЕКИНГ --------------------
+    def detect_and_track(self, video_path: str) -> List[Dict]:
+        """Детекция ценников с трекингом через model.track().
+        Заменяет extract_keyframes + detect_price_tags_on_keyframes + deduplicate_price_tags.
+
+        Первый проход (stream=True) — собирает треки и находит лучший кадр для каждого track_id.
+        Второй проход (cv2.VideoCapture) — читает только лучшие кадры.
+
+        Возвращает список keyframes в том же формате, что и раньше.
+        """
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise IOError(f"Не удалось открыть видео: {video_path}")
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        if fps == 0:
-            fps = 30  # fallback, если видео не сообщает FPS
+        # --- Первый проход: трекинг ---
+        print(f"Этап 1+2: трекинг ценников ({total_frames} кадров)...")
+        stream = self.detector.track(
+            source=video_path,
+            tracker=self.tracker,
+            persist=True,
+            stream=True,
+            verbose=False,
+            conf=0.3,
+        )
 
-        keyframes = []
-        last_gray = None
+        # track_id -> {best_frame_idx, best_score, best_xyxy, best_conf}
+        tracks = {}
         frame_idx = 0
 
-        while True:
+        for r in stream:
+            gray = cv2.cvtColor(r.orig_img, cv2.COLOR_BGR2GRAY)
+            sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+            if r.boxes is not None:
+                for box in r.boxes:
+                    tid = int(box.id[0]) if box.id is not None else None
+                    if tid is None:
+                        continue
+                    conf = box.conf[0].item()
+                    xyxy = box.xyxy[0].cpu().numpy()
+                    score = sharpness + conf * 100
+
+                    if tid not in tracks or score > tracks[tid]['best_score']:
+                        tracks[tid] = {
+                            'best_frame_idx': frame_idx,
+                            'best_score': score,
+                            'best_xyxy': xyxy,
+                            'best_conf': conf,
+                            'best_sharpness': sharpness,
+                        }
+
+            frame_idx += 1
+
+        print(f"  Найдено {len(tracks)} уникальных ценников")
+
+        # --- Второй проход: читаем только лучшие кадры ---
+        # Собираем какие кадры нужны: frame_idx -> список track_id
+        needed_frames = {}
+        for tid, info in tracks.items():
+            fi = info['best_frame_idx']
+            if fi not in needed_frames:
+                needed_frames[fi] = []
+            needed_frames[fi].append(tid)
+
+        keyframes = []
+        cap = cv2.VideoCapture(video_path)
+        current_idx = 0
+
+        for fi, tids in sorted(needed_frames.items()):
+            # Перемотка к нужному кадру
+            if fi < current_idx:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
+                current_idx = fi
+
+            while current_idx < fi:
+                ret, _ = cap.read()
+                if not ret:
+                    break
+                current_idx += 1
+
             ret, frame = cap.read()
             if not ret:
                 break
-            timestamp_ms = int((frame_idx / fps) * 1000)
-            # timestamp_ms = int(cap.get(cv2.CAP_PROP_POS_MSEC)) #потом вернемся сюда если надо
+            current_idx = fi + 1
 
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-            if lap_var < self.laplacian_thr:
-                frame_idx += 1
-                continue
+            timestamp_ms = int((fi / fps) * 1000)
 
-            if last_gray is not None:
-                if gray.shape != last_gray.shape:
-                    last_gray = cv2.resize(last_gray, (gray.shape[1], gray.shape[0]))
-                score, _ = ssim(gray, last_gray, full=True)
-                if score > self.ssim_thr:
-                    frame_idx += 1
-                    continue
+            tags = []
+            for tid in tids:
+                info = tracks[tid]
+                x1, y1, x2, y2 = info['best_xyxy']
+                tags.append({
+                    "corners": [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
+                    "confidence": info['best_conf'],
+                    "track_id": tid,
+                })
 
             keyframes.append({
                 "timestamp_ms": timestamp_ms,
                 "image": frame.copy(),
-                "sharpness": lap_var
+                "sharpness": info['best_sharpness'],
+                "price_tags": tags,
             })
-            last_gray = gray
-            if len(keyframes) >= max_frames:
-                break
-            frame_idx += 1
 
         cap.release()
-        print(f"Этап 1: отобрано {len(keyframes)} ключевых кадров")
-        return keyframes
-
-    # -------------------- ЭТАП 2 --------------------
-    def detect_price_tags_on_keyframes(self, keyframes: List[Dict]) -> List[Dict]:
-        """Добавляет в каждый кадр поле 'price_tags' со списком детекций."""
-        print("Этап 2: детекция ценников...")
-        for kf in keyframes:
-            image = kf['image']
-            results = self.detector(image, verbose=False)
-
-            tags = []
-            if hasattr(results[0], 'boxes') and results[0].boxes is not None:
-                boxes = results[0].boxes
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                    conf = box.conf[0].item()
-                    corners = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
-                    tags.append({
-                        "corners": corners,
-                        "confidence": conf
-                    })
-            kf['price_tags'] = tags
+        print(f"  Отобрано {len(keyframes)} кадров с лучшими ценниками")
         return keyframes
 
     # -------------------- ЭТАП 3: ВЫРЕЗАНИЕ И ВЫПРЯМЛЕНИЕ --------------------
@@ -120,8 +156,6 @@ class PriceTagPipeline:
         for kf in keyframes:
             image = kf['image']
             for tag in kf.get('price_tags', []):
-                if tag.get('_duplicate', False):
-                    continue
                 corners = np.array(tag['corners'], dtype=np.float32)
                 width = int(max(
                     np.linalg.norm(corners[1] - corners[0]),
@@ -151,8 +185,6 @@ class PriceTagPipeline:
         print("Этап 3.5: поиск QR-кодов...")
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
-                if tag.get('_duplicate', False):
-                    continue
                 warped = tag.get('warped')
                 if warped is None:
                     tag['qr_data'] = ''
@@ -300,13 +332,11 @@ class PriceTagPipeline:
                 cv2.imwrite(os.path.join(output_dir, fname), vis)
 
     # -------------------- ГЛАВНЫЙ МЕТОД --------------------
-    def run_to_csv(self, video_path: str, max_frames=50,
+    def run_to_csv(self, video_path: str,
                    debug=True, debug_dir='debug_output',
                    csv_path='output.csv') -> List[Dict]:
         """Запускает все этапы и сохраняет CSV с распознанными данными."""
-        keyframes = self.extract_keyframes(video_path, max_frames)
-        keyframes = self.detect_price_tags_on_keyframes(keyframes)
-        keyframes = self.deduplicate_price_tags(keyframes)
+        keyframes = self.detect_and_track(video_path)
 
         if debug:
             self.save_debug_frames(keyframes, debug_dir)
@@ -325,9 +355,7 @@ class PriceTagPipeline:
         filename = os.path.basename(video_path)
         for kf in keyframes:
             ts = kf['timestamp_ms']
-            for tag in kf.get('price_tags', []): #основной цикл
-                if tag.get('_duplicate', False):
-                    continue
+            for tag in kf.get('price_tags', []):
                 corners = tag['corners']
                 x_min = int(min(c[0] for c in corners))
                 y_min = int(min(c[1] for c in corners))
@@ -590,8 +618,6 @@ class PriceTagPipeline:
 
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
-                if tag.get('_duplicate', False):
-                    continue
                 warped = tag.get('warped')
                 if warped is None:
                     continue
@@ -637,8 +663,6 @@ class PriceTagPipeline:
         print("Нормализация ориентации ценников (по соотношению сторон)...")
         for kf in keyframes:
             for tag in kf.get('price_tags', []):
-                if tag.get('_duplicate', False):
-                    continue
                 warped = tag.get('warped')
                 if warped is None:
                     continue
@@ -747,94 +771,14 @@ class PriceTagPipeline:
         else:
             return 'unknown'
 
-    # -------------------- Дедупликация. Потом применю если потребуется --------------------
-    def deduplicate_price_tags(self, keyframes: List[Dict], iou_threshold: float = 0.3) -> List[Dict]:
-        """
-        Удаляет дубликаты ценников, встречающиеся в соседних кадрах.
-        Для каждой группы оставляет лучший (по резкости кадра или confidence детекции).
-        Возвращает новый список keyframes, где у дублирующих тегов установлен флаг _duplicate = True.
-        """
-        # Соберём все детекции с информацией о кадре
-        all_detections = []
-        for kf_idx, kf in enumerate(keyframes):
-            for tag_idx, tag in enumerate(kf.get('price_tags', [])):
-                corners = tag['corners']
-                x_min = min(c[0] for c in corners)
-                y_min = min(c[1] for c in corners)
-                x_max = max(c[0] for c in corners)
-                y_max = max(c[1] for c in corners)
-                all_detections.append({
-                    'kf_idx': kf_idx,
-                    'tag_idx': tag_idx,
-                    'bbox': [x_min, y_min, x_max, y_max],
-                    'sharpness': kf['sharpness'],
-                    'confidence': tag['confidence'],
-                    'timestamp_ms': kf['timestamp_ms']
-                })
-
-        # Простой жадный группировщик по IoU в скользящем окне
-        # Сортируем по времени
-        all_detections.sort(key=lambda d: d['timestamp_ms'])
-        groups = []  # список групп, каждая группа - список индексов детекций
-        used = set()
-
-        def iou(bbox1, bbox2):
-            # стандартный IoU
-            x1 = max(bbox1[0], bbox2[0])
-            y1 = max(bbox1[1], bbox2[1])
-            x2 = min(bbox1[2], bbox2[2])
-            y2 = min(bbox1[3], bbox2[3])
-            inter = max(0, x2 - x1) * max(0, y2 - y1)
-            area1 = (bbox1[2] - bbox1[0]) * (bbox1[3] - bbox1[1])
-            area2 = (bbox2[2] - bbox2[0]) * (bbox2[3] - bbox2[1])
-            union = area1 + area2 - inter
-            return inter / union if union > 0 else 0
-
-        for i, det in enumerate(all_detections):
-            if i in used:
-                continue
-            group = [i]
-            used.add(i)
-            # ищем похожие в пределах ближайших 5 секунд (или кадров)
-            for j in range(i + 1, len(all_detections)):
-                if j in used:
-                    continue
-                # проверяем, не слишком ли далеко по времени (опционально)
-                if all_detections[j]['timestamp_ms'] - det['timestamp_ms'] > 5000:
-                    break
-                if iou(det['bbox'], all_detections[j]['bbox']) > iou_threshold:
-                    group.append(j)
-                    used.add(j)
-            groups.append(group)
-
-        # В каждой группе выбираем лучший (по сумме sharpness+confidence*100)
-        best_per_group = []
-        for group in groups:
-            best_idx = max(group,
-                           key=lambda idx: all_detections[idx]['sharpness'] + all_detections[idx]['confidence'] * 100)
-            best_per_group.append(all_detections[best_idx])
-
-        # Помечаем все детекции, которые не являются лучшими в группе, как дубликаты
-        best_set = set((d['kf_idx'], d['tag_idx']) for d in best_per_group)
-        for kf in keyframes:
-            for tag in kf.get('price_tags', []):
-                tag['_duplicate'] = True  # по умолчанию все дубликаты
-        for det in best_per_group:
-            keyframes[det['kf_idx']]['price_tags'][det['tag_idx']]['_duplicate'] = False
-
-        print(f"Дедупликация: оставлено {len(best_per_group)} ценников из {len(all_detections)} первоначальных")
-        return keyframes
-
 # -------------------- Пример использования --------------------
 if __name__ == "__main__":
     pipeline = PriceTagPipeline(
         detection_model_path='runs/detect/runs/detect/price_tag_v1/weights/best.pt',
-        orientation_mode='color',   # "color" (цветная часть снизу, по умолч.) или "aspect" (ширина > высоты)
-        laplacian_thr=100   # порог чёткости, можно менять
+        orientation_mode='color',
     )
     pipeline.run_to_csv(
         video_path='videos/43_15.mp4',
-        max_frames=50,
         debug=True,
         debug_dir='debug_output',
         csv_path='result.csv'
