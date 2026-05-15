@@ -500,6 +500,13 @@ class PriceTagPipeline:
 
             discount_amount = discount_text
 
+            # Валидация: если число > 100, это не скидка, а цена
+            if discount_amount:
+                dm = re.search(r'(\d+)', discount_amount)
+                if dm and int(dm.group(1)) > 100:
+                    price_discount = discount_amount.replace('%', '')
+                    discount_amount = ''
+
             # Цена со скидкой: правая половина нижней части, крупный шрифт
             right_bottom = [l for l in bottom_lines if self._line_center_x(l) >= w / 2]
             best_price = None
