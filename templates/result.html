@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Результаты распознавания</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, sans-serif; background: #f5f5f5; color: #333; }
+    .header { background: #fff; border-bottom: 1px solid #ddd; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 20px; }
+    .actions { display: flex; gap: 10px; }
+    .btn {
+        padding: 8px 18px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background 0.2s;
+    }
+    .btn-primary { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+    .btn-primary:hover { background: #357abd; }
+    .btn-outline { background: #fff; color: #333; }
+    .btn-outline:hover { background: #f5f5f5; }
+    .stats { padding: 10px 30px; font-size: 14px; color: #666; }
+
+    .table-container { padding: 0 30px 30px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+    th { background: #fafafa; font-weight: 600; white-space: nowrap; }
+    td { vertical-align: middle; }
+    tr:hover { background: #f8f9fa; }
+    .tag-img { width: 120px; height: auto; border-radius: 4px; cursor: pointer; }
+    .price { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .discount { color: #c62828; font-weight: 600; }
+    .color-red { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e53935; vertical-align: middle; margin-right: 5px; }
+    .color-yellow { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #fdd835; vertical-align: middle; margin-right: 5px; }
+    .color-unknown { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #bbb; vertical-align: middle; margin-right: 5px; }
+
+    /* Lightbox */
+    .lightbox {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100;
+        justify-content: center; align-items: center; cursor: pointer;
+    }
+    .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+    .lightbox.open { display: flex; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>Результаты распознавания</h1>
+    <div class="actions">
+        <a class="btn btn-primary" href="/download/{{ task_id }}/csv">Скачать CSV</a>
+        <a class="btn btn-outline" href="/download/{{ task_id }}/html">Скачать HTML-отчёт</a>
+        <a class="btn btn-outline" href="/">Новое видео</a>
+    </div>
+</div>
+
+<div class="stats">Найдено ценников: <strong>{{ rows | length }}</strong></div>
+
+<div class="table-container">
+<table>
+    <thead>
+        <tr>
+            {% for key, label in columns %}
+            <th>{{ label }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            {% for key, label in columns %}
+            {% if key == '_thumbnail' %}
+            <td>
+                {% if row._thumbnail %}
+                <img class="tag-img" src="data:image/png;base64,{{ row._thumbnail }}" onclick="openLightbox(this.src)">
+                {% else %}
+                -
+                {% endif %}
+            </td>
+            {% elif key == 'color' %}
+            <td>
+                {% if row.color == 'red' %}<span class="color-red"></span>красный
+                {% elif row.color == 'yellow' %}<span class="color-yellow"></span>жёлтый
+                {% else %}<span class="color-unknown"></span>неизвестно{% endif %}
+            </td>
+            {% elif key == 'price_discount' %}
+            <td class="discount">{{ row.price_discount if row.price_discount else '-' }}</td>
+            {% elif key == 'price_default' %}
+            <td class="price">{{ row.price_default if row.price_default else '-' }}</td>
+            {% elif key == 'discount_amount' %}
+            <td class="discount">{{ row.discount_amount if row.discount_amount else '-' }}</td>
+            {% else %}
+            <td>{{ row[key] if row[key] else '-' }}</td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <img id="lightboxImg" src="">
+</div>
+
+<script>
+    function openLightbox(src) {
+        document.getElementById('lightboxImg').src = src;
+        document.getElementById('lightbox').classList.add('open');
+    }
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('open');
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

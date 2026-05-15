@@ -5,8 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Веб-приложение">
-      <change beforePath="$PROJECT_DIR$/detect_price_tags.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/web_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/web_app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,7 +43,7 @@
     "Python.train_price_tag.executor": "Run",
     "Python.web_app.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "feature-track-deduplication",
+    "git-widget-placeholder": "main",
     "last_opened_file_path": "/Users/a1234/PycharmProjects/lenta_cv/cv_datasets",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
