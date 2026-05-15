@@ -335,6 +335,61 @@ class PriceTagPipeline:
                 fname = f"warped_{ts}_{i}.png"
                 cv2.imwrite(os.path.join(output_dir, fname), vis)
 
+    # -------------------- УТИЛИТЫ --------------------
+    @staticmethod
+    def _format_price(val):
+        """Форматирует цену: точку → запятую, результат в кавычках для корректного CSV."""
+        s = str(val).strip()
+        if not s:
+            return ''
+        s = s.replace('.', ',')
+        return s
+
+    @staticmethod
+    def _parse_qr_fields(qr_data: str) -> Dict[str, str]:
+        """Парсит поля из QR-кода ценника Лента.
+        Формат: ключ1=значение1;ключ2=значение2;...
+        Поддерживаются полные и краткие имена ключей."""
+        result = {
+            'qr_code_barcode': '',
+            'price1_qr': '', 'price2_qr': '', 'price3_qr': '', 'price4_qr': '',
+            'wholesale_level_1_count': '', 'wholesale_level_1_price': '',
+            'wholesale_level_2_count': '', 'wholesale_level_2_price': '',
+            'action_price_qr': '', 'action_code_qr': '',
+        }
+        if not qr_data:
+            return result
+
+        key_map = {
+            # Штрихкод
+            'barcode': 'qr_code_barcode',
+            # Цены
+            'price1': 'price1_qr', 'p1': 'price1_qr',
+            'price2': 'price2_qr', 'p2': 'price2_qr',
+            'price3': 'price3_qr', 'p3': 'price3_qr',
+            'price4': 'price4_qr', 'p4': 'price4_qr',
+            # Оптовые пороги
+            'wholesale_level_1_count': 'wholesale_level_1_count',
+            'wholesale_level_1_price': 'wholesale_level_1_price',
+            'wholesale_level_2_count': 'wholesale_level_2_count',
+            'wholesale_level_2_price': 'wholesale_level_2_price',
+            # Акция
+            'actionprice': 'action_price_qr', 'ap': 'action_price_qr',
+            'actioncode': 'action_code_qr', 'ac': 'action_code_qr',
+        }
+
+        for part in qr_data.split(';'):
+            part = part.strip()
+            if '=' not in part:
+                continue
+            key, value = part.split('=', 1)
+            key_lower = key.strip().lower()
+            value = value.strip()
+            if key_lower in key_map:
+                result[key_map[key_lower]] = value
+
+        return result
+
     # -------------------- ГЛАВНЫЙ МЕТОД --------------------
     def run_to_csv(self, video_path: str,
                    debug=True, debug_dir='debug_output',
@@ -391,6 +446,9 @@ class PriceTagPipeline:
                 fields = self.parse_price_tag_fields(tag)
                 # fields уже содержит product_name, price_default, price_card, price_discount, discount_amount
 
+                # Парсим QR-поля
+                qr_fields = PriceTagPipeline._parse_qr_fields(tag.get('qr_data', ''))
+
                 record = {
                     'filename': filename,
                     'product_name': fields['product_name'],
@@ -411,7 +469,8 @@ class PriceTagPipeline:
                     'x_max': x_max,
                     'y_max': y_max,
                     'warped_image': tag.get('warped_image_path', ''),
-                    'raw_text': raw_text,  # <-- новое поле
+                    'raw_text': raw_text,
+                    **qr_fields,
                 }
                 records.append(record)
         df = pd.DataFrame(records)
@@ -420,12 +479,25 @@ class PriceTagPipeline:
             'filename', 'product_name', 'price_default', 'price_card', 'price_discount',
             'barcode', 'discount_amount', 'id_sku', 'print_datetime', 'code',
             'additional_info', 'color', 'special_symbols', 'frame_timestamp',
-            'x_min', 'y_min', 'x_max', 'y_max', 'warped_image', 'raw_text'
+            'x_min', 'y_min', 'x_max', 'y_max', 'warped_image', 'raw_text',
+            'qr_code_barcode',
+            'price1_qr', 'price2_qr', 'price3_qr', 'price4_qr',
+            'wholesale_level_1_count', 'wholesale_level_1_price',
+            'wholesale_level_2_count', 'wholesale_level_2_price',
+            'action_price_qr', 'action_code_qr',
         ]
         for col in columns:
             if col not in df.columns:
                 df[col] = ''
         df = df[columns]
+        # Форматируем цены: 599.99 → 599,99
+        price_cols = ['price_default', 'price_card', 'price_discount',
+                      'price1_qr', 'price2_qr', 'price3_qr', 'price4_qr',
+                      'wholesale_level_1_price', 'wholesale_level_2_price',
+                      'action_price_qr']
+        for col in price_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda v: PriceTagPipeline._format_price(v) if pd.notna(v) and v else v)
         df.to_csv(csv_path, index=False, encoding='utf-8')
         _progress(f"Готово: {len(records)} ценников", 1.0)
         return keyframes
@@ -547,6 +619,16 @@ class PriceTagPipeline:
                             break
 
             discount_amount = discount_text
+
+            # Нормализация: добавить '-' в начало и '%' в конец, если их нет
+            if discount_amount:
+                dm = re.search(r'(\d+)', discount_amount)
+                if dm:
+                    num = dm.group(1)
+                    if not discount_amount.lstrip().startswith('-'):
+                        discount_amount = '-' + discount_amount
+                    if not discount_amount.endswith('%'):
+                        discount_amount = discount_amount + '%'
 
             # Валидация: если число > 100, это не скидка, а цена
             if discount_amount:

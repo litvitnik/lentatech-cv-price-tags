@@ -4,8 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="новая модель">
-      <change afterPath="$PROJECT_DIR$/train_price_tag.py" afterDir="false" />
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Модель улучшена">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/detect_price_tags.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/result.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/result.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/web_app.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -263,7 +267,23 @@
       <option name="project" value="LOCAL" />
       <updated>1778876986330</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="Обучалка модели">
+      <option name="closed" value="true" />
+      <created>1778877213516</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1778877213516</updated>
+    </task>
+    <task id="LOCAL-00015" summary="Модель улучшена">
+      <option name="closed" value="true" />
+      <created>1778877465238</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1778877465238</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -306,12 +326,14 @@
     <MESSAGE value="track через модель" />
     <MESSAGE value="Веб-приложение" />
     <MESSAGE value="новая модель" />
-    <option name="LAST_COMMIT_MESSAGE" value="новая модель" />
+    <MESSAGE value="Обучалка модели" />
+    <MESSAGE value="Модель улучшена" />
+    <option name="LAST_COMMIT_MESSAGE" value="Модель улучшена" />
     <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778871444429" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/lenta_cv$train_price_tag.coverage" NAME="train_price_tag Coverage Results" MODIFIED="1778616159369" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/lenta_cv$web_app.coverage" NAME="web_app Coverage Results" MODIFIED="1778874744395" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/lenta_cv$web_app.coverage" NAME="web_app Coverage Results" MODIFIED="1778879203566" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

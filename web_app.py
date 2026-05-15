@@ -114,6 +114,14 @@ async def result_page(request: Request, task_id: str):
             row['_thumbnail'] = b64.b64encode(buf.getvalue()).decode('utf-8')
         else:
             row['_thumbnail'] = ''
+        # Форматируем цены: точка → запятая
+        for pc in ('price_default', 'price_card', 'price_discount',
+                   'price1_qr', 'price2_qr', 'price3_qr', 'price4_qr',
+                   'wholesale_level_1_price', 'wholesale_level_2_price',
+                   'action_price_qr'):
+            v = row.get(pc, '')
+            if v:
+                row[pc] = str(v).replace('.', ',')
 
     return templates.TemplateResponse("result.html", {
         "request": request,
@@ -123,10 +131,33 @@ async def result_page(request: Request, task_id: str):
             ('_thumbnail', 'Фото'),
             ('product_name', 'Название'),
             ('price_default', 'Цена'),
+            ('price_card', 'Цена по карте'),
             ('price_discount', 'Цена со скидкой'),
             ('discount_amount', 'Скидка'),
-            ('barcode', 'Штрихкод'),
+            ('barcode', 'QR-сырые данные'),
+            ('id_sku', 'SKU'),
+            ('print_datetime', 'Дата печати'),
+            ('code', 'Код'),
+            ('additional_info', 'Доп. информация'),
             ('color', 'Цвет'),
+            ('special_symbols', 'Символы'),
+            ('frame_timestamp', 'Кадр'),
+            ('raw_text', 'Исходный текст OCR'),
+            ('qr_code_barcode', 'Штрихкод из QR'),
+            ('price1_qr', 'Цена 1 (QR)'),
+            ('price2_qr', 'Цена 2 (QR)'),
+            ('price3_qr', 'Цена 3 (QR)'),
+            ('price4_qr', 'Цена 4 (QR)'),
+            ('wholesale_level_1_count', 'Опт 1, кол-во'),
+            ('wholesale_level_1_price', 'Опт 1, цена'),
+            ('wholesale_level_2_count', 'Опт 2, кол-во'),
+            ('wholesale_level_2_price', 'Опт 2, цена'),
+            ('action_price_qr', 'Акц. цена (QR)'),
+            ('action_code_qr', 'Код акции (QR)'),
+            ('x_min', 'X min'),
+            ('y_min', 'Y min'),
+            ('x_max', 'X max'),
+            ('y_max', 'Y max'),
         ],
     })
 
@@ -162,9 +193,8 @@ async def run_pipeline(task_id: str, video_path: str, assume_99_kopecks: bool = 
     def on_progress(message: str, fraction: float):
         nonlocal _max_progress
         if fraction < _max_progress:
-            fraction = _max_progress
-        else:
-            _max_progress = fraction
+            return  # пропускаем устаревшие обновления — не перезаписываем ни прогресс, ни сообщение
+        _max_progress = fraction
         task.progress = fraction
         task.message = message
 

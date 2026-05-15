@@ -37,6 +37,9 @@
     .color-red { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e53935; vertical-align: middle; margin-right: 5px; }
     .color-yellow { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #fdd835; vertical-align: middle; margin-right: 5px; }
     .color-unknown { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #bbb; vertical-align: middle; margin-right: 5px; }
+    .cell-text { max-width: 250px; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+    .cell-text-long { max-width: 400px; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+    .cell-narrow { white-space: nowrap; }
 
     /* Lightbox */
     .lightbox {
@@ -81,19 +84,33 @@
                 {% endif %}
             </td>
             {% elif key == 'color' %}
-            <td>
+            <td class="cell-narrow">
                 {% if row.color == 'red' %}<span class="color-red"></span>красный
                 {% elif row.color == 'yellow' %}<span class="color-yellow"></span>жёлтый
                 {% else %}<span class="color-unknown"></span>неизвестно{% endif %}
             </td>
             {% elif key == 'price_discount' %}
-            <td class="discount">{{ row.price_discount if row.price_discount else '-' }}</td>
+            <td class="discount cell-narrow">{{ row.price_discount if row.price_discount else '-' }}</td>
             {% elif key == 'price_default' %}
-            <td class="price">{{ row.price_default if row.price_default else '-' }}</td>
+            <td class="price cell-narrow">{{ row.price_default if row.price_default else '-' }}</td>
+            {% elif key == 'price_card' %}
+            <td class="price cell-narrow">{{ row.price_card if row.price_card else '-' }}</td>
             {% elif key == 'discount_amount' %}
-            <td class="discount">{{ row.discount_amount if row.discount_amount else '-' }}</td>
+            <td class="discount cell-narrow">{{ row.discount_amount if row.discount_amount else '-' }}</td>
+            {% elif key == 'raw_text' %}
+            <td class="cell-text-long">{{ row.raw_text if row.raw_text else '-' }}</td>
+            {% elif key == 'barcode' %}
+            <td class="cell-text">{{ row.barcode if row.barcode else '-' }}</td>
+            {% elif key == 'price1_qr' or key == 'price2_qr' or key == 'price3_qr' or key == 'price4_qr' %}
+            <td class="price cell-narrow">{{ row[key] if row[key] else '-' }}</td>
+            {% elif key == 'wholesale_level_1_price' or key == 'wholesale_level_2_price' %}
+            <td class="price cell-narrow">{{ row[key] if row[key] else '-' }}</td>
+            {% elif key == 'action_price_qr' %}
+            <td class="discount cell-narrow">{{ row.action_price_qr if row.action_price_qr else '-' }}</td>
+            {% elif key == 'frame_timestamp' or key == 'code' or key == 'id_sku' or key == 'qr_code_barcode' or key == 'action_code_qr' or key == 'wholesale_level_1_count' or key == 'wholesale_level_2_count' or key == 'x_min' or key == 'y_min' or key == 'x_max' or key == 'y_max' %}
+            <td class="cell-narrow">{{ row[key] if row[key] else '-' }}</td>
             {% else %}
-            <td>{{ row[key] if row[key] else '-' }}</td>
+            <td class="cell-text">{{ row[key] if row[key] else '-' }}</td>
             {% endif %}
             {% endfor %}
         </tr>
