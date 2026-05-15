@@ -590,6 +590,15 @@ class PriceTagPipeline:
             if price_discount.endswith('.00'):
                 price_discount = price_discount[:-3] + '.99'
 
+        # Если цена без скидки меньше цены со скидкой — скорее всего
+        # цена без скидки распознана некорректно, очищаем её
+        if price_default and price_discount:
+            try:
+                if float(price_default) < float(price_discount):
+                    price_default = ''
+            except ValueError:
+                pass
+
         return {
             'product_name': product_name,
             'price_default': price_default,

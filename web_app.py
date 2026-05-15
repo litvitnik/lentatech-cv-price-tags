@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 import pandas as pd
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
@@ -35,17 +35,6 @@ class TaskInfo:
 
 
 tasks: Dict[str, TaskInfo] = {}
-pipeline: PriceTagPipeline = None  # lazy init
-
-
-def get_pipeline() -> PriceTagPipeline:
-    global pipeline
-    if pipeline is None:
-        pipeline = PriceTagPipeline(
-            detection_model_path=MODEL_PATH,
-            orientation_mode='color',
-        )
-    return pipeline
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -54,7 +43,7 @@ async def index(request: Request):
 
 
 @app.post("/upload")
-async def upload(video: UploadFile = File(...)):
+async def upload(video: UploadFile = File(...), assume_99_kopecks: str = Form('1')):
     task_id = uuid.uuid4().hex[:12]
     task_dir = os.path.join(RESULTS_DIR, task_id)
     os.makedirs(task_dir, exist_ok=True)
@@ -64,9 +53,10 @@ async def upload(video: UploadFile = File(...)):
     with open(video_path, 'wb') as f:
         f.write(content)
 
+    assume99 = assume_99_kopecks == '1'
     tasks[task_id] = TaskInfo(status='processing', message='Задача создана', result_dir=task_dir)
 
-    asyncio.create_task(run_pipeline(task_id, video_path))
+    asyncio.create_task(run_pipeline(task_id, video_path, assume99))
 
     return {"task_id": task_id}
 
@@ -163,16 +153,27 @@ async def download_html(task_id: str):
     return FileResponse(html_path, media_type='text/html', filename='report.html')
 
 
-async def run_pipeline(task_id: str, video_path: str):
+async def run_pipeline(task_id: str, video_path: str, assume_99_kopecks: bool = True):
     task = tasks[task_id]
     task.status = 'processing'
 
+    _max_progress = 0.0
+
     def on_progress(message: str, fraction: float):
+        nonlocal _max_progress
+        if fraction < _max_progress:
+            fraction = _max_progress
+        else:
+            _max_progress = fraction
         task.progress = fraction
         task.message = message
 
     def _run():
-        p = get_pipeline()
+        p = PriceTagPipeline(
+            detection_model_path=MODEL_PATH,
+            orientation_mode='color',
+            assume_99_kopecks=assume_99_kopecks,
+        )
         csv_path = os.path.join(task.result_dir, 'result.csv')
         debug_dir = os.path.join(task.result_dir, 'debug_output')
         html_path = os.path.join(task.result_dir, 'report.html')
