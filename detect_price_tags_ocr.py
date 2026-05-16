@@ -18,15 +18,15 @@ from pyzbar.pyzbar import decode as pyzbar_decode
 from sklearn.cluster import DBSCAN
 
 
-EAST_INPUT_SIZE = 320
+EAST_INPUT_SIZE = 960
 
 
 class TextBasedPriceTagPipeline:
     def __init__(self,
                  east_model_path: str = "models/frozen_east_text_detection.pb",
                  assume_99_kopecks: bool = True,
-                 candidate_score_threshold: float = 3.0,
-                 dbscan_eps_factor: float = 3.0,
+                 candidate_score_threshold: float = 2.0,
+                 dbscan_eps_factor: float = 2.0,
                  qr_expand_ratio: float = 2.5,
                  boundary_padding: float = 0.15,
                  simple_rotate: bool = False):
@@ -53,7 +53,7 @@ class TextBasedPriceTagPipeline:
     # ================================================================
     def _sample_keyframes(self, video_path: str,
                           sharpness_threshold: float = 50.0,
-                          max_keyframes: int = 200) -> List[Dict]:
+                          max_keyframes: int = 50) -> List[Dict]:
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise IOError(f"Не удалось открыть видео: {video_path}")
@@ -140,7 +140,7 @@ class TextBasedPriceTagPipeline:
         ])
 
         boxes = []
-        conf_threshold = 0.5
+        conf_threshold = 0.3
         rows, cols = scores.shape[2:4]
 
         for y in range(rows):
@@ -443,7 +443,19 @@ class TextBasedPriceTagPipeline:
 
             merged = []
             candidates.sort(key=lambda c: -c['score'])
+            img_h, img_w = image.shape[:2]
+            img_area = img_h * img_w
             for cand in candidates:
+                bbox = cand['bbox']
+                cand_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                if cand_area < 500:
+                    continue
+                if cand_area > img_area * 0.5:
+                    continue
+                bw = bbox[2] - bbox[0]
+                bh = bbox[3] - bbox[1]
+                if bw < 30 or bh < 20:
+                    continue
                 is_dup = False
                 for i, existing in enumerate(merged):
                     if self._iou(cand['bbox'], existing['bbox']) > 0.4:
@@ -454,6 +466,7 @@ class TextBasedPriceTagPipeline:
                 if not is_dup:
                     merged.append(cand)
 
+            merged = merged[:10]
             kf['candidates'] = merged
             total_candidates += len(merged)
 
@@ -578,7 +591,7 @@ class TextBasedPriceTagPipeline:
             for j in range(i + 1, len(all_tags)):
                 if j in assigned:
                     continue
-                if hashes[i] - hashes[j] < 15:
+                if hashes[i] - hashes[j] <= 25:
                     group.append(j)
                     assigned.add(j)
             groups.append(group)
@@ -987,6 +1000,58 @@ class TextBasedPriceTagPipeline:
         s = s.replace('.', ',')
         return s
 
+    @staticmethod
+    def _deduplicate_by_content(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        def _content_key(row):
+            name = str(row.get('product_name', '')).strip().lower()
+            name = re.sub(r'\s+', ' ', name)
+            price_d = str(row.get('price_default', '')).strip()
+            price_disc = str(row.get('price_discount', '')).strip()
+            return f"{name}|{price_d}|{price_disc}"
+
+        def _field_count(row):
+            count = 0
+            for col in ['product_name', 'price_default', 'price_card',
+                        'price_discount', 'discount_amount', 'id_sku',
+                        'print_datetime', 'code', 'additional_info', 'special_symbols']:
+                v = row.get(col, '')
+                if pd.notna(v) and str(v).strip() and str(v).strip() != 'нет':
+                    count += 1
+            return count
+
+        before_filter = len(df)
+
+        def _is_likely_tag(row):
+            name = str(row.get('product_name', '')).strip()
+            has_name = bool(name) and name != 'nan' and len(name) > 3
+            price_d = str(row.get('price_default', '')).strip()
+            price_disc = str(row.get('price_discount', '')).strip()
+            has_price = bool(price_d) and price_d != 'nan' or bool(price_disc) and price_disc != 'nan'
+            has_qr = bool(str(row.get('qr_code_barcode', '')).strip())
+            return has_name or has_price or has_qr
+
+        df = df[df.apply(_is_likely_tag, axis=1)].reset_index(drop=True)
+        after_filter = len(df)
+        if before_filter != after_filter:
+            print(f"  Фильтрация: {before_filter} -> {after_filter} (убраны строки без имени/цены/QR)")
+
+        df['_content_key'] = df.apply(_content_key, axis=1)
+        df['_field_count'] = df.apply(_field_count, axis=1)
+
+        df = df.sort_values('_field_count', ascending=False)
+        deduped = df.drop_duplicates(subset=['_content_key'], keep='first')
+
+        before = len(df)
+        after = len(deduped)
+        if before != after:
+            print(f"  Контент-дедупликация: {before} -> {after} строк")
+
+        deduped = deduped.drop(columns=['_content_key', '_field_count'])
+        return deduped
+
     # ================================================================
     #  ГЛАВНЫЙ МЕТОД
     # ================================================================
@@ -1123,6 +1188,8 @@ class TextBasedPriceTagPipeline:
         for col in price_cols:
             if col in df.columns:
                 df[col] = df[col].apply(lambda v: self._format_price(v) if pd.notna(v) and v else v)
+
+        df = self._deduplicate_by_content(df)
 
         df.to_csv(csv_path, index=False, encoding='utf-8')
         _progress(f"Готово: {len(records)} ценников", 1.0)
