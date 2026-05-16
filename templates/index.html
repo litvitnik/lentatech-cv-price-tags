@@ -92,6 +92,19 @@
         Заменять 00 копеек на 99 (если OCR не распознал копейки)
     </label>
 
+    <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:14px; cursor:pointer;">
+        <input type="checkbox" id="simpleRotate" style="width:16px; height:16px;">
+        Повернуть видео на 90° против часовой (без авто-нормализации)
+    </label>
+
+    <div style="margin-top:15px;">
+        <label style="font-size:14px; display:block; margin-bottom:6px;">Пайплайн обработки:</label>
+        <select id="pipelineSelect" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px;">
+            <option value="ocr">OCR-пайплайн (без обучения, любые ценники)</option>
+            <option value="yolo">YOLO-пайплайн (требует обученной модели)</option>
+        </select>
+    </div>
+
     <button class="btn btn-primary" id="submitBtn" disabled>Обработать</button>
 
     <div class="progress-section" id="progressSection">
@@ -146,6 +159,8 @@
         const formData = new FormData();
         formData.append('video', selectedFile);
         formData.append('assume_99_kopecks', document.getElementById('assume99').checked ? '1' : '0');
+        formData.append('pipeline', document.getElementById('pipelineSelect').value);
+        formData.append('simple_rotate', document.getElementById('simpleRotate').checked ? '1' : '0');
 
         try {
             const resp = await fetch('/upload', { method: 'POST', body: formData });

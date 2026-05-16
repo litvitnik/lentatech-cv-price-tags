@@ -14,12 +14,14 @@ from starlette.requests import Request
 # Импорт пайплайна должен быть после установки переменной окружения
 os.environ['DYLD_LIBRARY_PATH'] = '/opt/homebrew/opt/zbar/lib'
 from detect_price_tags import PriceTagPipeline
+from detect_price_tags_ocr import TextBasedPriceTagPipeline
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_DIR = os.path.join(BASE_DIR, 'web_results')
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 MODEL_PATH = os.path.join(BASE_DIR, 'runs/detect/runs/detect/price_tag_v2/weights/best.pt')
+EAST_MODEL_PATH = os.path.join(BASE_DIR, 'models/frozen_east_text_detection.pb')
 
 app = FastAPI(title="Price Tag Detector")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, 'templates'))
@@ -43,7 +45,10 @@ async def index(request: Request):
 
 
 @app.post("/upload")
-async def upload(video: UploadFile = File(...), assume_99_kopecks: str = Form('1')):
+async def upload(video: UploadFile = File(...),
+                  assume_99_kopecks: str = Form('1'),
+                  pipeline: str = Form('ocr'),
+                  simple_rotate: str = Form('0')):
     task_id = uuid.uuid4().hex[:12]
     task_dir = os.path.join(RESULTS_DIR, task_id)
     os.makedirs(task_dir, exist_ok=True)
@@ -54,9 +59,10 @@ async def upload(video: UploadFile = File(...), assume_99_kopecks: str = Form('1
         f.write(content)
 
     assume99 = assume_99_kopecks == '1'
+    simple_rot = simple_rotate == '1'
     tasks[task_id] = TaskInfo(status='processing', message='Задача создана', result_dir=task_dir)
 
-    asyncio.create_task(run_pipeline(task_id, video_path, assume99))
+    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, simple_rot))
 
     return {"task_id": task_id}
 
@@ -184,7 +190,10 @@ async def download_html(task_id: str):
     return FileResponse(html_path, media_type='text/html', filename='report.html')
 
 
-async def run_pipeline(task_id: str, video_path: str, assume_99_kopecks: bool = True):
+async def run_pipeline(task_id: str, video_path: str,
+                       assume_99_kopecks: bool = True,
+                       pipeline_type: str = 'ocr',
+                       simple_rotate: bool = False):
     task = tasks[task_id]
     task.status = 'processing'
 
@@ -193,20 +202,29 @@ async def run_pipeline(task_id: str, video_path: str, assume_99_kopecks: bool = 
     def on_progress(message: str, fraction: float):
         nonlocal _max_progress
         if fraction < _max_progress:
-            return  # пропускаем устаревшие обновления — не перезаписываем ни прогресс, ни сообщение
+            return
         _max_progress = fraction
         task.progress = fraction
         task.message = message
 
     def _run():
-        p = PriceTagPipeline(
-            detection_model_path=MODEL_PATH,
-            orientation_mode='color',
-            assume_99_kopecks=assume_99_kopecks,
-        )
         csv_path = os.path.join(task.result_dir, 'result.csv')
-        debug_dir = os.path.join(task.result_dir, 'debug_output')
         html_path = os.path.join(task.result_dir, 'report.html')
+
+        if pipeline_type == 'ocr':
+            p = TextBasedPriceTagPipeline(
+                east_model_path=EAST_MODEL_PATH,
+                assume_99_kopecks=assume_99_kopecks,
+                simple_rotate=simple_rotate,
+            )
+            debug_dir = os.path.join(task.result_dir, 'debug_output_ocr')
+        else:
+            p = PriceTagPipeline(
+                detection_model_path=MODEL_PATH,
+                orientation_mode='color',
+                assume_99_kopecks=assume_99_kopecks,
+            )
+            debug_dir = os.path.join(task.result_dir, 'debug_output')
 
         p.run_to_csv(
             video_path,
