@@ -29,12 +29,14 @@ class TextBasedPriceTagPipeline:
                  dbscan_eps_factor: float = 2.0,
                  qr_expand_ratio: float = 2.5,
                  boundary_padding: float = 0.15,
+                 vertical_expand: float = 1.5,
                  simple_rotate: bool = False):
         self.assume_99_kopecks = assume_99_kopecks
         self.candidate_score_threshold = candidate_score_threshold
         self.dbscan_eps_factor = dbscan_eps_factor
         self.qr_expand_ratio = qr_expand_ratio
         self.boundary_padding = boundary_padding
+        self.vertical_expand = vertical_expand
         self.simple_rotate = simple_rotate
         self.ocr = None
 
@@ -330,7 +332,56 @@ class TextBasedPriceTagPipeline:
                 if assigned:
                     break
 
-        return list(clusters.values())
+        merged = self._merge_vertically_aligned_clusters(list(clusters.values()), median_h)
+        return merged
+
+    @staticmethod
+    def _merge_vertically_aligned_clusters(clusters: List[List[Dict]],
+                                           median_h: float) -> List[List[Dict]]:
+        if len(clusters) <= 1:
+            return clusters
+
+        cluster_bboxes = []
+        for cluster in clusters:
+            x1 = min(b['bbox'][0] for b in cluster)
+            y1 = min(b['bbox'][1] for b in cluster)
+            x2 = max(b['bbox'][2] for b in cluster)
+            y2 = max(b['bbox'][3] for b in cluster)
+            cluster_bboxes.append([x1, y1, x2, y2])
+
+        n = len(clusters)
+        merged_into = list(range(n))
+
+        def find(x):
+            while merged_into[x] != x:
+                merged_into[x] = merged_into[merged_into[x]]
+                x = merged_into[x]
+            return x
+
+        def union(a, b):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                merged_into[ra] = rb
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                ax1, ay1, ax2, ay2 = cluster_bboxes[i]
+                bx1, by1, bx2, by2 = cluster_bboxes[j]
+
+                overlap_x = max(0, min(ax2, bx2) - max(ax1, bx1))
+                min_w = min(ax2 - ax1, bx2 - bx1)
+                x_overlap_ratio = overlap_x / min_w if min_w > 0 else 0
+
+                gap_y = max(0, max(ay1, by1) - min(ay2, by2))
+
+                if x_overlap_ratio > 0.3 and gap_y < median_h * 5:
+                    union(i, j)
+
+        groups = defaultdict(list)
+        for i in range(n):
+            groups[find(i)].extend(clusters[i])
+
+        return list(groups.values())
 
     @staticmethod
     def _bbox_for_boxes(boxes: List[Dict]) -> List[float]:
@@ -352,7 +403,7 @@ class TextBasedPriceTagPipeline:
             pad_y = max(h * ratio, h * self.qr_expand_ratio) - h
         else:
             pad_x = w * self.boundary_padding
-            pad_y = h * self.boundary_padding
+            pad_y = h * self.vertical_expand
         img_h, img_w = image_shape[:2]
         return [
             max(0, x1 - pad_x),

@@ -4,8 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="Пытаемся">
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="больше ценников находим">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/detect_price_tags_ocr.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags_ocr.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -311,7 +312,23 @@
       <option name="project" value="LOCAL" />
       <updated>1778933860205</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="фиксы">
+      <option name="closed" value="true" />
+      <created>1778935679931</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1778935679931</updated>
+    </task>
+    <task id="LOCAL-00021" summary="больше ценников находим">
+      <option name="closed" value="true" />
+      <created>1778939404941</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1778939404941</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -360,12 +377,14 @@
     <MESSAGE value="репофиксы" />
     <MESSAGE value="Редмишка" />
     <MESSAGE value="Пытаемся" />
-    <option name="LAST_COMMIT_MESSAGE" value="Пытаемся" />
+    <MESSAGE value="фиксы" />
+    <MESSAGE value="больше ценников находим" />
+    <option name="LAST_COMMIT_MESSAGE" value="больше ценников находим" />
     <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/lenta_cv$detect_price_tags.coverage" NAME="detect_price_tags Coverage Results" MODIFIED="1778871444429" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/lenta_cv$train_price_tag.coverage" NAME="train_price_tag Coverage Results" MODIFIED="1778616159369" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/lenta_cv$web_app.coverage" NAME="web_app Coverage Results" MODIFIED="1778935468285" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/lenta_cv$web_app.coverage" NAME="web_app Coverage Results" MODIFIED="1778965835281" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
