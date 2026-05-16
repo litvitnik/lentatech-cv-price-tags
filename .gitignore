@@ -2,3 +2,23 @@
 /debug_output/
 /videos/
 /cv_datasets/
+/web_results/
+
+# Модели — игнорируем всё кроме best.pt
+runs/*
+!runs/detect/
+runs/detect/*
+!runs/detect/runs/
+runs/detect/runs/*
+!runs/detect/runs/detect/
+runs/detect/runs/detect/*
+!runs/detect/runs/detect/price_tag_v1/
+runs/detect/runs/detect/price_tag_v1/*
+!runs/detect/runs/detect/price_tag_v1/weights/
+runs/detect/runs/detect/price_tag_v1/weights/*
+!runs/detect/runs/detect/price_tag_v1/weights/best.pt
+!runs/detect/runs/detect/price_tag_v2/
+runs/detect/runs/detect/price_tag_v2/*
+!runs/detect/runs/detect/price_tag_v2/weights/
+runs/detect/runs/detect/price_tag_v2/weights/*
+!runs/detect/runs/detect/price_tag_v2/weights/best.pt
