@@ -48,7 +48,7 @@ async def index(request: Request):
 async def upload(video: UploadFile = File(...),
                  assume_99_kopecks: str = Form('1'),
                  pipeline: str = Form('ocr'),
-                 simple_rotate: str = Form('0'),
+                 normalize_orientation: str = Form('0'),
                  trim_method: str = Form('aspect')):
     task_id = uuid.uuid4().hex[:12]
     task_dir = os.path.join(RESULTS_DIR, task_id)
@@ -60,10 +60,10 @@ async def upload(video: UploadFile = File(...),
         f.write(content)
 
     assume99 = assume_99_kopecks == '1'
-    simple_rot = simple_rotate == '1'
+    norm_orient = normalize_orientation == '1'
     tasks[task_id] = TaskInfo(status='processing', message='Задача создана', result_dir=task_dir)
 
-    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, simple_rot, trim_method))
+    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, norm_orient, trim_method))
 
     return {"task_id": task_id}
 
@@ -205,7 +205,7 @@ async def download_html_filtered(task_id: str):
 async def run_pipeline(task_id: str, video_path: str,
                        assume_99_kopecks: bool = True,
                        pipeline_type: str = 'ocr',
-                       simple_rotate: bool = False,
+                       normalize_orientation: bool = False,
                        trim_method: str = 'aspect'):
     task = tasks[task_id]
     task.status = 'processing'
@@ -228,7 +228,7 @@ async def run_pipeline(task_id: str, video_path: str,
             p = TextBasedPriceTagPipeline(
                 east_model_path=EAST_MODEL_PATH,
                 assume_99_kopecks=assume_99_kopecks,
-                simple_rotate=simple_rotate,
+                normalize_orientation=normalize_orientation,
                 trim_method=trim_method,
             )
             debug_dir = os.path.join(task.result_dir, 'debug_output_ocr')

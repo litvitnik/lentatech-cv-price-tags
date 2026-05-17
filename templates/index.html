@@ -77,6 +77,7 @@
         После обработки откроется страница с результатами: таблица всех распознанных полей,
         фотографии ценников и исходный текст OCR для отладки.
         CSV можно скачать из верхней панели на странице результатов.
+        Видео автоматически поворачивается на 90° против часовой.
     </p>
 
     <div class="upload-area" id="dropZone">
@@ -93,8 +94,8 @@
     </label>
 
     <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:14px; cursor:pointer;">
-        <input type="checkbox" id="simpleRotate" style="width:16px; height:16px;">
-        Повернуть видео на 90° против часовой (без авто-нормализации)
+        <input type="checkbox" id="normalizeOrientation" style="width:16px; height:16px;">
+        Авто-нормализация ориентации ценников (по цвету полосы)
     </label>
 
     <div style="margin-top:15px;">
@@ -168,7 +169,7 @@
         formData.append('video', selectedFile);
         formData.append('assume_99_kopecks', document.getElementById('assume99').checked ? '1' : '0');
         formData.append('pipeline', document.getElementById('pipelineSelect').value);
-        formData.append('simple_rotate', document.getElementById('simpleRotate').checked ? '1' : '0');
+        formData.append('normalize_orientation', document.getElementById('normalizeOrientation').checked ? '1' : '0');
         formData.append('trim_method', document.getElementById('trimMethod').value);
 
         try {

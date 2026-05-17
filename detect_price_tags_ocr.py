@@ -30,7 +30,7 @@ class TextBasedPriceTagPipeline:
                  qr_expand_ratio: float = 2.5,
                  horizontal_expand: float = 0.5,
                  vertical_expand: float = 0.3,
-                 simple_rotate: bool = False,
+                 normalize_orientation: bool = False,
                  trim_method: str = 'aspect'):
         self.assume_99_kopecks = assume_99_kopecks
         self.candidate_score_threshold = candidate_score_threshold
@@ -38,7 +38,7 @@ class TextBasedPriceTagPipeline:
         self.qr_expand_ratio = qr_expand_ratio
         self.horizontal_expand = horizontal_expand
         self.vertical_expand = vertical_expand
-        self.simple_rotate = simple_rotate
+        self.normalize_orientation = normalize_orientation
         self.trim_method = trim_method
         self.ocr = None
 
@@ -74,8 +74,7 @@ class TextBasedPriceTagPipeline:
             if not ret:
                 break
 
-            if self.simple_rotate:
-                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
@@ -1283,15 +1282,15 @@ class TextBasedPriceTagPipeline:
             return []
 
         _progress("Нормализация ориентации...", 0.52)
-        if self.simple_rotate:
-            print("  Простой поворот: пропускаю нормализацию ориентации")
+        if self.normalize_orientation:
+            keyframes = self._normalize_orientation(keyframes)
+        else:
+            print("  Авто-нормализация отключена: определяю только цвет")
             for kf in keyframes:
                 for tag in kf.get('price_tags', []):
                     crop = tag.get('crop')
                     if crop is not None:
                         tag['color'] = self._detect_color(crop)
-        else:
-            keyframes = self._normalize_orientation(keyframes)
 
         if debug:
             self._save_debug_crops(keyframes, debug_dir)
