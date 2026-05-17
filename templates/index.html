@@ -105,6 +105,14 @@
         </select>
     </div>
 
+    <div style="margin-top:15px;">
+        <label style="font-size:14px; display:block; margin-bottom:6px;">Метод обрезки вертикали:</label>
+        <select id="trimMethod" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px;">
+            <option value="aspect">По аспект-ратио (обрезать до пропорции ценника)</option>
+            <option value="projection">По проекциям (искать пустые полосы-разделители)</option>
+        </select>
+    </div>
+
     <button class="btn btn-primary" id="submitBtn" disabled>Обработать</button>
 
     <div class="progress-section" id="progressSection">
@@ -161,6 +169,7 @@
         formData.append('assume_99_kopecks', document.getElementById('assume99').checked ? '1' : '0');
         formData.append('pipeline', document.getElementById('pipelineSelect').value);
         formData.append('simple_rotate', document.getElementById('simpleRotate').checked ? '1' : '0');
+        formData.append('trim_method', document.getElementById('trimMethod').value);
 
         try {
             const resp = await fetch('/upload', { method: 'POST', body: formData });

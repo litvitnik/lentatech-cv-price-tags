@@ -28,16 +28,18 @@ class TextBasedPriceTagPipeline:
                  candidate_score_threshold: float = 2.0,
                  dbscan_eps_factor: float = 2.0,
                  qr_expand_ratio: float = 2.5,
-                 boundary_padding: float = 0.15,
-                 vertical_expand: float = 1.5,
-                 simple_rotate: bool = False):
+                 horizontal_expand: float = 0.5,
+                 vertical_expand: float = 0.3,
+                 simple_rotate: bool = False,
+                 trim_method: str = 'aspect'):
         self.assume_99_kopecks = assume_99_kopecks
         self.candidate_score_threshold = candidate_score_threshold
         self.dbscan_eps_factor = dbscan_eps_factor
         self.qr_expand_ratio = qr_expand_ratio
-        self.boundary_padding = boundary_padding
+        self.horizontal_expand = horizontal_expand
         self.vertical_expand = vertical_expand
         self.simple_rotate = simple_rotate
+        self.trim_method = trim_method
         self.ocr = None
 
         print(f"Загружаю EAST модель: {east_model_path}")
@@ -402,7 +404,7 @@ class TextBasedPriceTagPipeline:
             pad_x = max(w * ratio, w * self.qr_expand_ratio) - w
             pad_y = max(h * ratio, h * self.qr_expand_ratio) - h
         else:
-            pad_x = w * self.boundary_padding
+            pad_x = w * self.horizontal_expand
             pad_y = h * self.vertical_expand
         img_h, img_w = image_shape[:2]
         return [
@@ -505,7 +507,10 @@ class TextBasedPriceTagPipeline:
                     continue
                 bw = bbox[2] - bbox[0]
                 bh = bbox[3] - bbox[1]
-                if bw < 30 or bh < 20:
+                if bw < 80 or bh < 100:
+                    continue
+                aspect = bw / bh if bh > 0 else 0
+                if aspect < 0.3 or aspect > 3.0:
                     continue
                 is_dup = False
                 for i, existing in enumerate(merged):
@@ -553,8 +558,8 @@ class TextBasedPriceTagPipeline:
         x1, y1, x2, y2 = text_bbox
         img_h, img_w = image.shape[:2]
 
-        pad_x = (x2 - x1) * self.boundary_padding
-        pad_y = (y2 - y1) * self.boundary_padding
+        pad_x = (x2 - x1) * self.horizontal_expand
+        pad_y = (y2 - y1) * self.horizontal_expand
         search_x1 = max(0, int(x1 - pad_x * 2))
         search_y1 = max(0, int(y1 - pad_y * 2))
         search_x2 = min(img_w, int(x2 + pad_x * 2))
@@ -604,6 +609,101 @@ class TextBasedPriceTagPipeline:
             return [rx + search_x1, ry + search_y1, rx + rw + search_x1, ry + rh + search_y1]
 
         return self._expand_bbox(text_bbox, image.shape)
+
+    # ================================================================
+    #  ЭТАП 4b: Обрезка избыточной вертикали
+    # ================================================================
+    def _trim_vertical_excess(self, keyframes: List[Dict]) -> List[Dict]:
+        print(f"Этап 4b: обрезка вертикали (метод={self.trim_method})...")
+        trimmed_count = 0
+        for kf in keyframes:
+            image = kf['image']
+            for cand in kf.get('candidates', []):
+                crop = cand.get('crop')
+                if crop is None:
+                    continue
+                h, w = crop.shape[:2]
+                aspect = w / h if h > 0 else 999
+                if aspect >= 0.6:
+                    continue
+
+                if self.trim_method == 'projection':
+                    new_y2 = self._trim_by_projection(crop, cand)
+                else:
+                    new_y2 = self._trim_by_aspect(crop, cand)
+
+                if new_y2 is not None and new_y2 < h:
+                    bbox = cand.get('crop_bbox', [0, 0, w, h])
+                    x1, y1, x2, y2 = [int(v) for v in bbox]
+                    new_y2_abs = y1 + new_y2
+                    new_y2_abs = min(new_y2_abs, image.shape[0])
+                    cand['crop'] = image[y1:new_y2_abs, x1:x2].copy()
+                    cand['crop_bbox'] = [x1, y1, x2, new_y2_abs]
+                    trimmed_count += 1
+
+        print(f"  Обрезано по вертикали: {trimmed_count} ценников")
+        return keyframes
+
+    @staticmethod
+    def _trim_by_aspect(crop: np.ndarray, cand: Dict) -> Optional[int]:
+        h, w = crop.shape[:2]
+        max_h = int(w / 0.7)
+        if h <= max_h:
+            return None
+        return max_h
+
+    @staticmethod
+    def _trim_by_projection(crop: np.ndarray, cand: Dict) -> Optional[int]:
+        h, w = crop.shape[:2]
+        if h < 10 or w < 10:
+            return None
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        inv = 255 - binary
+
+        projection = np.sum(inv, axis=1)
+        max_proj = np.max(projection) if np.max(projection) > 0 else 1
+        projection_norm = projection / max_proj
+
+        text_boxes = cand.get('boxes', [])
+        if text_boxes:
+            bbox = cand.get('crop_bbox', [0, 0, w, h])
+            offset_y = bbox[1]
+            text_bottom = max(b['bbox'][3] for b in text_boxes) - offset_y
+            search_start = min(int(text_bottom + (text_bottom * 0.2)), h - 1)
+        else:
+            search_start = h // 3
+
+        gap_threshold = 0.03
+        min_gap_height = max(3, h // 40)
+
+        trim_y = None
+        in_gap = False
+        gap_start = search_start
+
+        for y in range(search_start, h):
+            if projection_norm[y] < gap_threshold:
+                if not in_gap:
+                    gap_start = y
+                    in_gap = True
+            else:
+                if in_gap:
+                    gap_len = y - gap_start
+                    if gap_len >= min_gap_height:
+                        trim_y = gap_start
+                        break
+                    in_gap = False
+
+        if trim_y is not None:
+            pad = max(5, int(h * 0.03))
+            trim_y = min(trim_y + pad, h)
+
+        max_h = int(w / 0.5)
+        if trim_y is None or trim_y > max_h:
+            trim_y = max_h
+
+        return trim_y if trim_y < h else None
 
     # ================================================================
     #  ЭТАП 5: Дедупликация между кадрами
@@ -1134,9 +1234,13 @@ class TextBasedPriceTagPipeline:
 
         _progress("Уточнение границ...", 0.42)
         keyframes = self._refine_boundaries(keyframes)
-        _progress("Границы уточнены", 0.45)
+        _progress("Границы уточнены", 0.44)
 
-        _progress("Дедупликация...", 0.47)
+        _progress("Обрезка вертикали...", 0.45)
+        keyframes = self._trim_vertical_excess(keyframes)
+        _progress("Вертикаль обрезана", 0.47)
+
+        _progress("Дедупликация...", 0.48)
         keyframes = self._deduplicate_across_frames(keyframes)
         _progress(f"Уникальных ценников: {len(keyframes)}", 0.5)
 
@@ -1294,7 +1398,8 @@ class TextBasedPriceTagPipeline:
                 img_tag = ''
             image_tags.append(img_tag)
 
-        df.insert(0, 'image', image_tags)
+        df.insert(0, '#', range(1, len(df) + 1))
+        df.insert(1, 'image', image_tags)
 
         html_template = """
         <html>
