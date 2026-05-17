@@ -4,10 +4,10 @@ os.environ['DYLD_LIBRARY_PATH'] = '/opt/homebrew/opt/zbar/lib'
 import cv2
 import numpy as np
 import re
-import imagehash
+import difflib
 import base64
 from io import BytesIO
-from typing import List, Dict, Callable, Optional, Tuple
+from typing import List, Dict, Callable, Optional, Tuple, Union
 from collections import defaultdict
 
 import pandas as pd
@@ -17,8 +17,9 @@ from paddleocr import PaddleOCR
 from pyzbar.pyzbar import decode as pyzbar_decode
 from sklearn.cluster import DBSCAN
 
-
-EAST_INPUT_SIZE = 960
+import torch
+import torchvision
+from torchvision import transforms
 
 
 class TextBasedPriceTagPipeline:
@@ -33,7 +34,8 @@ class TextBasedPriceTagPipeline:
                  vertical_expand_down: float = 0.8,
                  normalize_orientation: bool = False,
                  trim_method: str = 'aspect',
-                 paddle_expand: bool = True):
+                 paddle_expand: bool = True,
+                 use_gpu: Union[str, bool] = 'auto'):
         self.assume_99_kopecks = assume_99_kopecks
         self.candidate_score_threshold = candidate_score_threshold
         self.dbscan_eps_factor = dbscan_eps_factor
@@ -45,6 +47,22 @@ class TextBasedPriceTagPipeline:
         self.trim_method = trim_method
         self.paddle_expand = paddle_expand
         self.ocr = None
+        self._cnn_model = None
+        self._cnn_preprocess = None
+
+        if use_gpu == 'auto':
+            self.use_gpu = torch.cuda.is_available()
+        elif isinstance(use_gpu, str):
+            self.use_gpu = use_gpu.lower() in ('1', 'true', 'yes')
+        else:
+            self.use_gpu = bool(use_gpu)
+
+        self.east_input_size = 1920 if self.use_gpu else 960
+
+        if self.use_gpu:
+            print(f"GPU-режим: EAST input={self.east_input_size}, PaddleOCR GPU, MobileNetV3 CUDA")
+        else:
+            print(f"CPU-режим: EAST input={self.east_input_size}")
 
         print(f"Загружаю EAST модель: {east_model_path}")
         if not os.path.exists(east_model_path):
@@ -54,6 +72,16 @@ class TextBasedPriceTagPipeline:
                 "https://raw.githubusercontent.com/oyyd/frozen_east_text_detection.pb/master/frozen_east_text_detection.pb"
             )
         self.east_net = cv2.dnn.readNet(east_model_path)
+
+        if self.use_gpu:
+            cuda_count = cv2.cuda.getCudaEnabledDeviceCount() if hasattr(cv2, 'cuda') else 0
+            if cuda_count > 0:
+                self.east_net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+                self.east_net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+                print("  EAST: CUDA backend включён")
+            else:
+                print("  EAST: OpenCV без CUDA, работаю на CPU (медленнее)")
+
         print("EAST модель загружена")
 
     # ================================================================
@@ -131,8 +159,8 @@ class TextBasedPriceTagPipeline:
     # ================================================================
     def _detect_east(self, image: np.ndarray) -> List[Dict]:
         h, w = image.shape[:2]
-        new_w = max(32, (min(w, EAST_INPUT_SIZE) // 32) * 32)
-        new_h = max(32, (min(h, EAST_INPUT_SIZE * 2) // 32) * 32)
+        new_w = max(32, (min(w, self.east_input_size) // 32) * 32)
+        new_h = max(32, (min(h, self.east_input_size * 2) // 32) * 32)
         scale_x = w / new_w
         scale_y = h / new_h
 
@@ -624,7 +652,7 @@ class TextBasedPriceTagPipeline:
         print("Этап 4a: расширение кропов через PaddleOCR детекцию...")
         if self.ocr is None:
             print("  Загружаю PaddleOCR...")
-            self.ocr = PaddleOCR(lang='ru', use_textline_orientation=True)
+            self.ocr = PaddleOCR(lang='ru', use_gpu=self.use_gpu, use_textline_orientation=True)
 
         expanded_count = 0
         total_candidates = 0
@@ -803,10 +831,59 @@ class TextBasedPriceTagPipeline:
         return trim_y if trim_y < h else None
 
     # ================================================================
-    #  ЭТАП 5: Дедупликация между кадрами
+    #  ЭТАП 5: CNN-дедупликация между кадрами
     # ================================================================
-    def _deduplicate_across_frames(self, keyframes: List[Dict]) -> Tuple[List[Dict], List[List[Dict]]]:
-        print("Этап 5: дедупликация ценников между кадрами...")
+    @staticmethod
+    def _init_cnn_model(use_gpu: bool):
+        model = torchvision.models.mobilenet_v3_small(weights='DEFAULT')
+        model.eval()
+        feature_extractor = torch.nn.Sequential(
+            model.features,
+            model.avgpool,
+            torch.nn.Flatten(),
+        )
+        if use_gpu:
+            feature_extractor = feature_extractor.cuda()
+
+        class LetterboxResize:
+            def __init__(self, size=224):
+                self.size = size
+
+            def __call__(self, img):
+                w, h = img.size
+                scale = self.size / max(w, h)
+                new_w, new_h = int(w * scale), int(h * scale)
+                img = img.resize((new_w, new_h), Image.BILINEAR)
+                pad_img = Image.new('RGB', (self.size, self.size), (0, 0, 0))
+                pad_img.paste(img, ((self.size - new_w) // 2, (self.size - new_h) // 2))
+                return pad_img
+
+        preprocess = transforms.Compose([
+            LetterboxResize(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
+        ])
+
+        return feature_extractor, preprocess
+
+    def _get_cnn_embedding(self, crop: np.ndarray) -> Optional[np.ndarray]:
+        if self._cnn_model is None:
+            self._cnn_model, self._cnn_preprocess = self._init_cnn_model(self.use_gpu)
+        try:
+            pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+            tensor = self._cnn_preprocess(pil_img).unsqueeze(0)
+            if self.use_gpu:
+                tensor = tensor.cuda()
+            with torch.no_grad():
+                embedding = self._cnn_model(tensor).squeeze().cpu().numpy()
+            return embedding
+        except Exception:
+            return None
+
+    def _deduplicate_by_cnn(self, keyframes: List[Dict],
+                            similarity_threshold: float = 0.75) -> Tuple[List[Dict], List[List[Dict]]]:
+        print("Этап 5: CNN-дедупликация ценников между кадрами...")
 
         all_tags = []
         for kf in keyframes:
@@ -823,35 +900,65 @@ class TextBasedPriceTagPipeline:
             print("  Нет валидных кандидатов для дедупликации")
             return [], []
 
-        hashes = []
-        for tag in all_tags:
+        print(f"  Вычисляю CNN-эмбеддинги для {len(all_tags)} кропов...")
+        embeddings = []
+        valid_indices = []
+        for i, tag in enumerate(tqdm(all_tags, desc="  CNN embeddings")):
             crop = tag['candidate']['crop']
-            pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
-            hashes.append(imagehash.phash(pil_img, hash_size=16))
+            emb = self._get_cnn_embedding(crop)
+            if emb is not None:
+                embeddings.append(emb)
+                valid_indices.append(i)
 
-        groups = []
-        assigned = set()
-        for i in range(len(all_tags)):
-            if i in assigned:
-                continue
-            group = [i]
-            assigned.add(i)
-            for j in range(i + 1, len(all_tags)):
-                if j in assigned:
-                    continue
-                if hashes[i] - hashes[j] <= 25:
-                    group.append(j)
-                    assigned.add(j)
-            groups.append(group)
+        if not embeddings:
+            print("  Не удалось вычислить эмбеддинги")
+            return [], []
+
+        embeddings = np.array(embeddings)
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1, norms)
+        embeddings_norm = embeddings / norms
+
+        n = len(valid_indices)
+        parent = list(range(n))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a, b):
+            a, b = find(a), find(b)
+            if a != b:
+                parent[a] = b
+
+        print(f"  Вычисляю попарные similarity для {n} кропов...")
+        cos_sim_matrix = embeddings_norm @ embeddings_norm.T
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                if cos_sim_matrix[i, j] >= similarity_threshold:
+                    union(i, j)
+
+        groups_map = defaultdict(list)
+        for i in range(n):
+            groups_map[find(i)].append(i)
+
+        valid_set = set(valid_indices)
 
         result_tags = []
         dup_groups = []
-        for group in groups:
-            best_idx = max(group, key=lambda idx: all_tags[idx]['candidate'].get('score', 0))
+        for group_indices in groups_map.values():
+            orig_indices = [valid_indices[i] for i in group_indices]
+            best_idx = max(orig_indices,
+                          key=lambda idx: all_tags[idx]['candidate'].get('score', 0))
             result_tags.append(all_tags[best_idx])
-            if len(group) > 1:
+
+            if len(orig_indices) > 1:
+                first_mat_idx = group_indices[0]
                 dup_group = []
-                for idx in group:
+                for mat_idx, idx in zip(group_indices, orig_indices):
                     tag = all_tags[idx]
                     cand = tag['candidate']
                     crop = cand.get('crop')
@@ -861,10 +968,15 @@ class TextBasedPriceTagPipeline:
                         'crop_bbox': cand.get('crop_bbox', [0, 0, 0, 0]),
                         'is_kept': idx == best_idx,
                         'crop': crop,
+                        'similarity': float(cos_sim_matrix[first_mat_idx, mat_idx]),
                     })
                 dup_groups.append(dup_group)
 
-        print(f"  Дедупликация: {len(all_tags)} -> {len(result_tags)} уникальных ценников")
+        for i, tag in enumerate(all_tags):
+            if i not in valid_set:
+                result_tags.append(tag)
+
+        print(f"  CNN-дедупликация: {len(all_tags)} -> {len(result_tags)} уникальных ценников")
 
         deduped = []
         for tag in result_tags:
@@ -940,7 +1052,7 @@ class TextBasedPriceTagPipeline:
                           progress_callback: Optional[Callable] = None) -> List[Dict]:
         if self.ocr is None:
             print("Загружаю PaddleOCR (русский)...")
-            self.ocr = PaddleOCR(lang='ru', use_textline_orientation=True)
+            self.ocr = PaddleOCR(lang='ru', use_gpu=self.use_gpu, use_textline_orientation=True)
 
         tags_to_process = []
         for kf in keyframes:
@@ -1310,7 +1422,17 @@ class TextBasedPriceTagPipeline:
             key_to_indices[row['_content_key']].append(idx)
         for key, indices in key_to_indices.items():
             if len(indices) > 1:
-                content_dup_groups.append([int(i) for i in indices])
+                group_data = []
+                for idx in indices:
+                    r = df.loc[idx]
+                    group_data.append({
+                        'index': int(idx),
+                        'product_name': str(r.get('product_name', '')).strip()[:40],
+                        'price_default': str(r.get('price_default', '')).strip(),
+                        'price_discount': str(r.get('price_discount', '')).strip(),
+                        'frame_timestamp': str(r.get('frame_timestamp', '')).strip(),
+                    })
+                content_dup_groups.append(group_data)
 
         deduped = df.drop_duplicates(subset=['_content_key'], keep='first')
 
@@ -1321,6 +1443,125 @@ class TextBasedPriceTagPipeline:
 
         deduped = deduped.drop(columns=['_content_key', '_field_count'])
         return deduped, content_dup_groups
+
+    @staticmethod
+    def _name_match_fraction(name_a: str, name_b: str,
+                             word_threshold: float = 0.65) -> float:
+        def norm(s):
+            s = s.lower().strip()
+            s = re.sub(r'[.,;:!?()\[\]{}]', ' ', s)
+            s = re.sub(r'\s+', ' ', s)
+            return s
+
+        words_a = [w for w in norm(name_a).split() if len(w) >= 2]
+        words_b = [w for w in norm(name_b).split() if len(w) >= 2]
+
+        if not words_a or not words_b:
+            return 0.0
+
+        shorter, longer = (words_a, words_b) if len(words_a) <= len(words_b) else (words_b, words_a)
+
+        used = set()
+        matched = 0
+        for w1 in shorter:
+            best_ratio = 0
+            best_j = -1
+            for j, w2 in enumerate(longer):
+                if j in used:
+                    continue
+                r = difflib.SequenceMatcher(None, w1, w2).ratio()
+                if r > best_ratio:
+                    best_ratio = r
+                    best_j = j
+            if best_j >= 0 and best_ratio >= word_threshold:
+                used.add(best_j)
+                matched += 1
+
+        return matched / len(shorter)
+
+    @staticmethod
+    def _field_count(row) -> int:
+        count = 0
+        for col in ['product_name', 'price_default', 'price_card',
+                     'price_discount', 'discount_amount', 'id_sku',
+                     'print_datetime', 'code', 'additional_info', 'special_symbols']:
+            v = row.get(col, '')
+            if pd.notna(v) and str(v).strip() and str(v).strip() != 'нет':
+                count += 1
+        return count
+
+    @staticmethod
+    def _merge_by_text(df: pd.DataFrame,
+                       match_fraction_threshold: float = 0.6,
+                       word_threshold: float = 0.65) -> Tuple[pd.DataFrame, List[List[Dict]]]:
+        if df.empty or len(df) < 2:
+            return df, []
+
+        print("  Текстовая дедупликация (difflib)...")
+
+        n = len(df)
+        parent = list(range(n))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a, b):
+            a, b = find(a), find(b)
+            if a != b:
+                parent[a] = b
+
+        names = [str(row.get('product_name', '')).strip() for _, row in df.iterrows()]
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                if not names[i] or not names[j] or names[i] == 'nan' or names[j] == 'nan':
+                    continue
+                frac = TextBasedPriceTagPipeline._name_match_fraction(
+                    names[i], names[j], word_threshold=word_threshold
+                )
+                if frac >= match_fraction_threshold:
+                    union(i, j)
+
+        groups_map = defaultdict(list)
+        for i in range(n):
+            groups_map[find(i)].append(i)
+
+        text_dup_groups = []
+        for group_indices in groups_map.values():
+            if len(group_indices) > 1:
+                group_data = []
+                for idx in group_indices:
+                    row = df.iloc[idx]
+                    group_data.append({
+                        'index': idx,
+                        'product_name': str(row.get('product_name', '')).strip()[:40],
+                        'price_default': str(row.get('price_default', '')).strip(),
+                        'price_discount': str(row.get('price_discount', '')).strip(),
+                        'frame_timestamp': str(row.get('frame_timestamp', '')).strip(),
+                    })
+                text_dup_groups.append(group_data)
+
+        to_drop = set()
+        for group_indices in groups_map.values():
+            if len(group_indices) <= 1:
+                continue
+            best_idx = max(group_indices,
+                          key=lambda idx: TextBasedPriceTagPipeline._field_count(df.iloc[idx]))
+            for idx in group_indices:
+                if idx != best_idx:
+                    to_drop.add(idx)
+
+        before = len(df)
+        df = df.drop(index=list(to_drop)).reset_index(drop=True)
+        after = len(df)
+
+        if before != after:
+            print(f"  Текстовая дедупликация: {before} -> {after} строк")
+
+        return df, text_dup_groups
 
     @staticmethod
     def _has_price_in_raw_text(raw_text: str) -> bool:
@@ -1397,8 +1638,8 @@ class TextBasedPriceTagPipeline:
         keyframes = self._trim_vertical_excess(keyframes)
         _progress("Вертикаль обрезана", 0.47)
 
-        _progress("Дедупликация...", 0.48)
-        keyframes, phash_dup_groups = self._deduplicate_across_frames(keyframes)
+        _progress("Дедупликация (CNN)...", 0.48)
+        keyframes, cnn_dup_groups = self._deduplicate_by_cnn(keyframes)
         _progress(f"Уникальных ценников: {len(keyframes)}", 0.5)
 
         if not keyframes:
@@ -1501,6 +1742,8 @@ class TextBasedPriceTagPipeline:
             if col in df.columns:
                 df[col] = df[col].apply(lambda v: self._format_price(v) if pd.notna(v) and v else v)
 
+        df, text_dup_groups = self._merge_by_text(df)
+
         df, content_dup_groups = self._deduplicate_by_content(df)
 
         df, df_filtered = self._filter_by_price(df)
@@ -1511,7 +1754,7 @@ class TextBasedPriceTagPipeline:
         df_filtered.to_csv(filtered_csv_path, index=False, encoding='utf-8')
 
         self._save_duplicates_html(
-            phash_dup_groups, content_dup_groups,
+            cnn_dup_groups, text_dup_groups, content_dup_groups,
             records, csv_path.replace('.csv', '_duplicates.html'),
             debug_dir,
         )
@@ -1522,15 +1765,16 @@ class TextBasedPriceTagPipeline:
     # ================================================================
     #  Дубликаты — HTML-отчёт
     # ================================================================
-    def _save_duplicates_html(self, phash_dup_groups: List[List[Dict]],
+    def _save_duplicates_html(self, cnn_dup_groups: List[List[Dict]],
+                              text_dup_groups: List[List[int]],
                               content_dup_groups: List[List[int]],
                               records: List[Dict], html_path: str,
                               debug_dir: str):
         sections = []
 
-        if phash_dup_groups:
-            parts = ['<h3>pHash-дедупликация (похожие кропы между кадрами)</h3>']
-            for gi, group in enumerate(phash_dup_groups):
+        if cnn_dup_groups:
+            parts = ['<h3>CNN-дедупликация (похожие кропы между кадрами)</h3>']
+            for gi, group in enumerate(cnn_dup_groups):
                 parts.append(f'<h4>Группа {gi + 1} ({len(group)} кропов)</h4>')
                 parts.append('<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">')
                 for item in group:
@@ -1539,6 +1783,7 @@ class TextBasedPriceTagPipeline:
                     bbox = item.get('crop_bbox', [0, 0, 0, 0])
                     score = item.get('score', 0)
                     is_kept = item.get('is_kept', False)
+                    sim = item.get('similarity', 1.0)
 
                     img_tag = ''
                     if crop is not None:
@@ -1559,42 +1804,67 @@ class TextBasedPriceTagPipeline:
                             f'<div style="text-align:center;">'
                             f'<img src="data:image/png;base64,{b64}" '
                             f'style="max-width:150px; border:{border};"><br>'
-                            f'<span style="font-size:11px;">ts={ts} score={score:.1f} <b>{label}</b></span>'
+                            f'<span style="font-size:11px;">ts={ts} sim={sim:.2f} score={score:.1f} <b>{label}</b></span>'
                             f'</div>'
                         )
                     parts.append(img_tag)
                 parts.append('</div>')
             sections.append('\n'.join(parts))
 
+        if text_dup_groups:
+            parts = ['<h3>Текстовая дедупликация (OCR-варианты одного названия)</h3>']
+            for gi, group in enumerate(text_dup_groups):
+                parts.append(f'<h4>Группа {gi + 1} ({len(group)} строк)</h4>')
+                parts.append('<table style="border-collapse:collapse; margin-bottom:20px;">')
+                parts.append('<tr style="background:#eee;"><th style="padding:4px 8px;">#</th>'
+                             '<th style="padding:4px 8px;">Название</th>'
+                             '<th style="padding:4px 8px;">Цена</th>'
+                             '<th style="padding:4px 8px;">Скидка</th>'
+                             '<th style="padding:4px 8px;">Кадр</th></tr>')
+                for ri, item in enumerate(group):
+                    name = item.get('product_name', '')
+                    pd_val = item.get('price_default', '')
+                    pdis = item.get('price_discount', '')
+                    ts = item.get('frame_timestamp', '')
+                    bg = '#e8f5e9' if ri == 0 else '#fff'
+                    label = ' <b>ОСТАВЛЕН</b>' if ri == 0 else ''
+                    parts.append(
+                        f'<tr style="background:{bg};">'
+                        f'<td style="padding:4px 8px;">{ri + 1}</td>'
+                        f'<td style="padding:4px 8px;">{name}</td>'
+                        f'<td style="padding:4px 8px;">{pd_val}</td>'
+                        f'<td style="padding:4px 8px;">{pdis}</td>'
+                        f'<td style="padding:4px 8px;">{ts}{label}</td></tr>'
+                    )
+                parts.append('</table>')
+            sections.append('\n'.join(parts))
+
         if content_dup_groups:
             parts = ['<h3>Контент-дедупликация (одинаковые название+цена)</h3>']
-            for gi, indices in enumerate(content_dup_groups):
-                parts.append(f'<h4>Группа {gi + 1} ({len(indices)} строк)</h4>')
-                parts.append('<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">')
-                for ri, idx in enumerate(indices):
-                    if idx < len(records):
-                        rec = records[idx]
-                        img_path = rec.get('warped_image', '')
-                        img_tag = ''
-                        if img_path and os.path.exists(img_path):
-                            pil_img = Image.open(img_path)
-                            pil_img.thumbnail((150, 150))
-                            buffer = BytesIO()
-                            pil_img.save(buffer, format='PNG')
-                            b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-                            border = '3px solid green' if ri == 0 else '1px solid #ccc'
-                            label = 'ОСТАВЛЕН' if ri == 0 else 'дубликат'
-                            name = rec.get('product_name', '')[:30]
-                            price = rec.get('price_discount', '') or rec.get('price_default', '') or ''
-                            img_tag = (
-                                f'<div style="text-align:center;">'
-                                f'<img src="data:image/png;base64,{b64}" '
-                                f'style="max-width:150px; border:{border};"><br>'
-                                f'<span style="font-size:11px;">{name}<br>{price} <b>{label}</b></span>'
-                                f'</div>'
-                            )
-                        parts.append(img_tag)
-                parts.append('</div>')
+            for gi, group in enumerate(content_dup_groups):
+                parts.append(f'<h4>Группа {gi + 1} ({len(group)} строк)</h4>')
+                parts.append('<table style="border-collapse:collapse; margin-bottom:20px;">')
+                parts.append('<tr style="background:#eee;"><th style="padding:4px 8px;">#</th>'
+                             '<th style="padding:4px 8px;">Название</th>'
+                             '<th style="padding:4px 8px;">Цена</th>'
+                             '<th style="padding:4px 8px;">Скидка</th>'
+                             '<th style="padding:4px 8px;">Кадр</th></tr>')
+                for ri, item in enumerate(group):
+                    name = item.get('product_name', '')
+                    pd_val = item.get('price_default', '')
+                    pdis = item.get('price_discount', '')
+                    ts = item.get('frame_timestamp', '')
+                    bg = '#e8f5e9' if ri == 0 else '#fff'
+                    label = ' <b>ОСТАВЛЕН</b>' if ri == 0 else ''
+                    parts.append(
+                        f'<tr style="background:{bg};">'
+                        f'<td style="padding:4px 8px;">{ri + 1}</td>'
+                        f'<td style="padding:4px 8px;">{name}</td>'
+                        f'<td style="padding:4px 8px;">{pd_val}</td>'
+                        f'<td style="padding:4px 8px;">{pdis}</td>'
+                        f'<td style="padding:4px 8px;">{ts}{label}</td></tr>'
+                    )
+                parts.append('</table>')
             sections.append('\n'.join(parts))
 
         if not sections:

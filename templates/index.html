@@ -119,6 +119,15 @@
         <label for="paddleExpand" style="font-size:14px;">PaddleOCR расширение кропов (медленно, но находит обрезанные цены)</label>
     </div>
 
+    <div style="margin-top:15px;">
+        <label style="font-size:14px; display:block; margin-bottom:6px;">Устройство:</label>
+        <select id="useGpu" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px;">
+            <option value="auto">Авто (GPU если доступен)</option>
+            <option value="0">CPU (медленно, совместимо)</option>
+            <option value="1">GPU (быстро, требует CUDA)</option>
+        </select>
+    </div>
+
     <button class="btn btn-primary" id="submitBtn" disabled>Обработать</button>
 
     <div class="progress-section" id="progressSection">
@@ -177,6 +186,7 @@
         formData.append('normalize_orientation', document.getElementById('normalizeOrientation').checked ? '1' : '0');
         formData.append('trim_method', document.getElementById('trimMethod').value);
         formData.append('paddle_expand', document.getElementById('paddleExpand').checked ? '1' : '0');
+        formData.append('use_gpu', document.getElementById('useGpu').value);
 
         try {
             const resp = await fetch('/upload', { method: 'POST', body: formData });

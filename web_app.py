@@ -50,7 +50,8 @@ async def upload(video: UploadFile = File(...),
                   pipeline: str = Form('ocr'),
                   normalize_orientation: str = Form('0'),
                   trim_method: str = Form('aspect'),
-                  paddle_expand: str = Form('1')):
+                  paddle_expand: str = Form('1'),
+                  use_gpu: str = Form('auto')):
     task_id = uuid.uuid4().hex[:12]
     task_dir = os.path.join(RESULTS_DIR, task_id)
     os.makedirs(task_dir, exist_ok=True)
@@ -65,7 +66,7 @@ async def upload(video: UploadFile = File(...),
     pexpand = paddle_expand == '1'
     tasks[task_id] = TaskInfo(status='processing', message='Задача создана', result_dir=task_dir)
 
-    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, norm_orient, trim_method, pexpand))
+    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, norm_orient, trim_method, pexpand, use_gpu))
 
     return {"task_id": task_id}
 
@@ -209,7 +210,8 @@ async def run_pipeline(task_id: str, video_path: str,
                        pipeline_type: str = 'ocr',
                        normalize_orientation: bool = False,
                        trim_method: str = 'aspect',
-                       paddle_expand: bool = True):
+                       paddle_expand: bool = True,
+                       use_gpu: str = 'auto'):
     task = tasks[task_id]
     task.status = 'processing'
 
@@ -234,6 +236,7 @@ async def run_pipeline(task_id: str, video_path: str,
                 normalize_orientation=normalize_orientation,
                 trim_method=trim_method,
                 paddle_expand=paddle_expand,
+                use_gpu=use_gpu,
             )
             debug_dir = os.path.join(task.result_dir, 'debug_output_ocr')
         else:
