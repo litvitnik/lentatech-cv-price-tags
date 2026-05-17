@@ -114,6 +114,11 @@
         </select>
     </div>
 
+    <div style="margin-top:15px; display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="paddleExpand" checked style="width:16px; height:16px;">
+        <label for="paddleExpand" style="font-size:14px;">PaddleOCR расширение кропов (медленно, но находит обрезанные цены)</label>
+    </div>
+
     <button class="btn btn-primary" id="submitBtn" disabled>Обработать</button>
 
     <div class="progress-section" id="progressSection">
@@ -171,6 +176,7 @@
         formData.append('pipeline', document.getElementById('pipelineSelect').value);
         formData.append('normalize_orientation', document.getElementById('normalizeOrientation').checked ? '1' : '0');
         formData.append('trim_method', document.getElementById('trimMethod').value);
+        formData.append('paddle_expand', document.getElementById('paddleExpand').checked ? '1' : '0');
 
         try {
             const resp = await fetch('/upload', { method: 'POST', body: formData });

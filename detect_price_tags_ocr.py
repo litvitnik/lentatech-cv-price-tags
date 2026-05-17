@@ -29,17 +29,21 @@ class TextBasedPriceTagPipeline:
                  dbscan_eps_factor: float = 2.0,
                  qr_expand_ratio: float = 2.5,
                  horizontal_expand: float = 0.5,
-                 vertical_expand: float = 0.3,
+                 vertical_expand_up: float = 0.2,
+                 vertical_expand_down: float = 0.8,
                  normalize_orientation: bool = False,
-                 trim_method: str = 'aspect'):
+                 trim_method: str = 'aspect',
+                 paddle_expand: bool = True):
         self.assume_99_kopecks = assume_99_kopecks
         self.candidate_score_threshold = candidate_score_threshold
         self.dbscan_eps_factor = dbscan_eps_factor
         self.qr_expand_ratio = qr_expand_ratio
         self.horizontal_expand = horizontal_expand
-        self.vertical_expand = vertical_expand
+        self.vertical_expand_up = vertical_expand_up
+        self.vertical_expand_down = vertical_expand_down
         self.normalize_orientation = normalize_orientation
         self.trim_method = trim_method
+        self.paddle_expand = paddle_expand
         self.ocr = None
 
         print(f"Загружаю EAST модель: {east_model_path}")
@@ -401,16 +405,18 @@ class TextBasedPriceTagPipeline:
         w, h = x2 - x1, y2 - y1
         if ratio > 1:
             pad_x = max(w * ratio, w * self.qr_expand_ratio) - w
-            pad_y = max(h * ratio, h * self.qr_expand_ratio) - h
+            pad_y_up = max(h * ratio, h * self.qr_expand_ratio) - h
+            pad_y_down = pad_y_up
         else:
             pad_x = w * self.horizontal_expand
-            pad_y = h * self.vertical_expand
+            pad_y_up = h * self.vertical_expand_up
+            pad_y_down = h * self.vertical_expand_down
         img_h, img_w = image_shape[:2]
         return [
             max(0, x1 - pad_x),
-            max(0, y1 - pad_y),
+            max(0, y1 - pad_y_up),
             min(img_w, x2 + pad_x),
-            min(img_h, y2 + pad_y),
+            min(img_h, y2 + pad_y_down),
         ]
 
     @staticmethod
@@ -499,13 +505,14 @@ class TextBasedPriceTagPipeline:
             img_area = img_h * img_w
             for cand in candidates:
                 bbox = cand['bbox']
-                cand_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                expanded = self._expand_bbox(bbox, image.shape)
+                cand_area = (expanded[2] - expanded[0]) * (expanded[3] - expanded[1])
                 if cand_area < 500:
                     continue
                 if cand_area > img_area * 0.5:
                     continue
-                bw = bbox[2] - bbox[0]
-                bh = bbox[3] - bbox[1]
+                bw = expanded[2] - expanded[0]
+                bh = expanded[3] - expanded[1]
                 if bw < 80 or bh < 100:
                     continue
                 aspect = bw / bh if bh > 0 else 0
@@ -521,7 +528,7 @@ class TextBasedPriceTagPipeline:
                 if not is_dup:
                     merged.append(cand)
 
-            merged = merged[:10]
+            merged = merged[:15]
             kf['candidates'] = merged
             total_candidates += len(merged)
 
@@ -558,11 +565,12 @@ class TextBasedPriceTagPipeline:
         img_h, img_w = image.shape[:2]
 
         pad_x = (x2 - x1) * self.horizontal_expand
-        pad_y = (y2 - y1) * self.horizontal_expand
+        pad_y_up = (y2 - y1) * self.vertical_expand_up
+        pad_y_down = (y2 - y1) * self.vertical_expand_down
         search_x1 = max(0, int(x1 - pad_x * 2))
-        search_y1 = max(0, int(y1 - pad_y * 2))
+        search_y1 = max(0, int(y1 - pad_y_up * 2))
         search_x2 = min(img_w, int(x2 + pad_x * 2))
-        search_y2 = min(img_h, int(y2 + pad_y * 2))
+        search_y2 = min(img_h, int(y2 + pad_y_down * 2))
 
         roi = image[search_y1:search_y2, search_x1:search_x2]
         if roi.size == 0:
@@ -610,6 +618,104 @@ class TextBasedPriceTagPipeline:
         return self._expand_bbox(text_bbox, image.shape)
 
     # ================================================================
+    #  ЭТАП 4a: Расширение кропов через PaddleOCR детекцию
+    # ================================================================
+    def _expand_with_paddle_det(self, keyframes: List[Dict]) -> List[Dict]:
+        print("Этап 4a: расширение кропов через PaddleOCR детекцию...")
+        if self.ocr is None:
+            print("  Загружаю PaddleOCR...")
+            self.ocr = PaddleOCR(lang='ru', use_textline_orientation=True)
+
+        expanded_count = 0
+        total_candidates = 0
+        for kf in keyframes:
+            image = kf['image']
+            for cand in kf.get('candidates', []):
+                crop = cand.get('crop')
+                if crop is None:
+                    continue
+                crop_bbox = cand.get('crop_bbox')
+                if not crop_bbox:
+                    continue
+
+                crop_h, crop_w = crop.shape[:2]
+                if crop_w < 40 or crop_h < 40:
+                    continue
+
+                total_candidates += 1
+                aspect = crop_w / crop_h if crop_h > 0 else 0
+                if aspect < 0.8:
+                    continue
+
+                result = self.ocr.predict(crop)
+                if not result or len(result) == 0:
+                    continue
+                res = result[0]
+
+                if isinstance(res, dict) and 'dt_polys' in res:
+                    dt_polys = res['dt_polys']
+                elif hasattr(res, 'dt_polys'):
+                    dt_polys = res['dt_polys']
+                else:
+                    continue
+
+                if not dt_polys or len(dt_polys) == 0:
+                    continue
+
+                text_bottom = 0
+                text_top = crop_h
+                text_right = 0
+                text_left = crop_w
+                for poly in dt_polys:
+                    if hasattr(poly, 'shape') and len(poly.shape) == 2:
+                        ys = poly[:, 1]
+                        xs = poly[:, 0]
+                    else:
+                        continue
+                    text_bottom = max(text_bottom, int(ys.max()))
+                    text_top = min(text_top, int(ys.min()))
+                    text_right = max(text_right, int(xs.max()))
+                    text_left = min(text_left, int(xs.min()))
+
+                expand_down = 0
+                expand_right = 0
+                expand_left = 0
+
+                bottom_margin = max(8, int(crop_h * 0.12))
+                if text_bottom > crop_h - bottom_margin:
+                    expand_down = int(crop_h * 0.5)
+
+                x_margin = max(5, int(crop_w * 0.05))
+                if text_right > crop_w - x_margin:
+                    expand_right = int(crop_w * 0.15)
+                if text_left < x_margin:
+                    expand_left = int(crop_w * 0.15)
+
+                max_expand_y = int(crop_h * 0.8)
+                max_expand_x = int(crop_w * 0.3)
+                expand_down = min(expand_down, max_expand_y)
+                expand_right = min(expand_right, max_expand_x)
+                expand_left = min(expand_left, max_expand_x)
+
+                if expand_down > 0 or expand_right > 0 or expand_left > 0:
+                    x1, y1, x2, y2 = [int(v) for v in crop_bbox]
+                    new_x1 = max(0, x1 - expand_left)
+                    new_y1 = y1
+                    new_x2 = min(image.shape[1], x2 + expand_right)
+                    new_y2 = min(image.shape[0], y2 + expand_down)
+
+                    new_crop = image[new_y1:new_y2, new_x1:new_x2].copy()
+                    if new_crop.size == 0:
+                        continue
+
+                    cand['crop'] = new_crop
+                    cand['crop_bbox'] = [new_x1, new_y1, new_x2, new_y2]
+                    expanded_count += 1
+
+        print(f"  Проверено: {total_candidates}, расширено: {expanded_count}")
+        return keyframes
+
+    # ================================================================
     #  ЭТАП 4b: Обрезка избыточной вертикали
     # ================================================================
     def _trim_vertical_excess(self, keyframes: List[Dict]) -> List[Dict]:
@@ -646,7 +752,7 @@ class TextBasedPriceTagPipeline:
     @staticmethod
     def _trim_by_aspect(crop: np.ndarray, cand: Dict) -> Optional[int]:
         h, w = crop.shape[:2]
-        max_h = int(w / 0.7)
+        max_h = int(w / 0.5)
         if h <= max_h:
             return None
         return max_h
@@ -665,23 +771,15 @@ class TextBasedPriceTagPipeline:
         max_proj = np.max(projection) if np.max(projection) > 0 else 1
         projection_norm = projection / max_proj
 
-        text_boxes = cand.get('boxes', [])
-        if text_boxes:
-            bbox = cand.get('crop_bbox', [0, 0, w, h])
-            offset_y = bbox[1]
-            text_bottom = max(b['bbox'][3] for b in text_boxes) - offset_y
-            search_start = min(int(text_bottom + (text_bottom * 0.2)), h - 1)
-        else:
-            search_start = h // 3
-
+        bottom_margin = int(h * 0.65)
         gap_threshold = 0.03
-        min_gap_height = max(3, h // 40)
+        min_gap_height = max(5, h // 20)
 
         trim_y = None
         in_gap = False
-        gap_start = search_start
+        gap_start = bottom_margin
 
-        for y in range(search_start, h):
+        for y in range(bottom_margin, h):
             if projection_norm[y] < gap_threshold:
                 if not in_gap:
                     gap_start = y
@@ -962,9 +1060,7 @@ class TextBasedPriceTagPipeline:
             if num < 1000000:
                 id_sku = sku_match.group(1)
 
-        code_match = re.search(r'\b([A-ZА-Я]{1,3}-?\d{1,4})\b', all_text_joined)
-        if code_match:
-            code = code_match.group(1)
+        code = ''
 
         percent_lines = [ln for ln in ocr_lines if self._has_percent_pattern(ln['text'])]
         if percent_lines:
@@ -1196,7 +1292,7 @@ class TextBasedPriceTagPipeline:
             price_disc = str(row.get('price_discount', '')).strip()
             has_price = bool(price_d) and price_d != 'nan' or bool(price_disc) and price_disc != 'nan'
             has_qr = bool(str(row.get('qr_code_barcode', '')).strip())
-            return has_name or has_price or has_qr
+            return has_name and (has_price or has_qr)
 
         df = df[df.apply(_is_likely_tag, axis=1)].reset_index(drop=True)
         after_filter = len(df)
@@ -1230,14 +1326,13 @@ class TextBasedPriceTagPipeline:
     def _has_price_in_raw_text(raw_text: str) -> bool:
         if not raw_text:
             return False
-        if re.search(r'\d{1,6}[.,\s]\d{2}\b', raw_text):
+        cleaned = re.sub(r'\d+\s*[гrгр]\b\.?', '', raw_text, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\d+\s*%', '', cleaned)
+        if re.search(r'\d{1,6}[.,]\d{2}\b', cleaned):
             return True
-        if re.search(r'\b\d{2,6}\b', raw_text):
-            nums = re.findall(r'\b(\d{2,6})\b', raw_text)
-            for n in nums:
-                val = int(n)
-                if 10 <= val <= 99999:
-                    return True
+        nums = re.findall(r'\b(\d{2,6})\b', cleaned)
+        if len(nums) >= 2 and any(int(n) >= 50 for n in nums):
+            return True
         return False
 
     def _filter_by_price(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -1293,7 +1388,12 @@ class TextBasedPriceTagPipeline:
         keyframes = self._refine_boundaries(keyframes)
         _progress("Границы уточнены", 0.44)
 
-        _progress("Обрезка вертикали...", 0.45)
+        if self.paddle_expand:
+            _progress("Расширение кропов (PaddleOCR)...", 0.445)
+            keyframes = self._expand_with_paddle_det(keyframes)
+            _progress("Кропы расширены", 0.455)
+
+        _progress("Обрезка вертикали...", 0.46)
         keyframes = self._trim_vertical_excess(keyframes)
         _progress("Вертикаль обрезана", 0.47)
 

@@ -4,8 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="v5 отсеили эффективно и повернули по умолчанию">
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="v6 диагностика">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/detect_price_tags_ocr.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags_ocr.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/web_app.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -359,7 +362,15 @@
       <option name="project" value="LOCAL" />
       <updated>1779009609486</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="v6 диагностика">
+      <option name="closed" value="true" />
+      <created>1779010430456</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1779010430456</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -389,7 +400,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="stages 1 and 2" />
     <MESSAGE value="фулл пайплайн" />
     <MESSAGE value="рабочая версия" />
     <MESSAGE value="Определяем цвет" />
@@ -414,7 +424,8 @@
     <MESSAGE value="v3 - проекция и что-то еще" />
     <MESSAGE value="v4 отсеиваем лишнее" />
     <MESSAGE value="v5 отсеили эффективно и повернули по умолчанию" />
-    <option name="LAST_COMMIT_MESSAGE" value="v5 отсеили эффективно и повернули по умолчанию" />
+    <MESSAGE value="v6 диагностика" />
+    <option name="LAST_COMMIT_MESSAGE" value="v6 диагностика" />
     <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
