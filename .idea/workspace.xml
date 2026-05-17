@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="v2">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="v3 - проекция и что-то еще">
       <change beforePath="$PROJECT_DIR$/detect_price_tags_ocr.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags_ocr.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/web_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/web_app.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -338,7 +336,15 @@
       <option name="project" value="LOCAL" />
       <updated>1778966419688</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="v3 - проекция и что-то еще">
+      <option name="closed" value="true" />
+      <created>1779007331176</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1779007331176</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -390,7 +396,8 @@
     <MESSAGE value="фиксы" />
     <MESSAGE value="больше ценников находим" />
     <MESSAGE value="v2" />
-    <option name="LAST_COMMIT_MESSAGE" value="v2" />
+    <MESSAGE value="v3 - проекция и что-то еще" />
+    <option name="LAST_COMMIT_MESSAGE" value="v3 - проекция и что-то еще" />
     <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">

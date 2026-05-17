@@ -191,6 +191,17 @@ async def download_html(task_id: str):
     return FileResponse(html_path, media_type='text/html', filename='report.html')
 
 
+@app.get("/download/{task_id}/html_filtered")
+async def download_html_filtered(task_id: str):
+    task = tasks.get(task_id)
+    if not task or not task.result_dir:
+        raise HTTPException(status_code=404, detail="Task not found")
+    html_path = os.path.join(task.result_dir, 'report_filtered_out.html')
+    if not os.path.exists(html_path):
+        raise HTTPException(status_code=404, detail="Filtered HTML report not found")
+    return FileResponse(html_path, media_type='text/html', filename='report_filtered_out.html')
+
+
 async def run_pipeline(task_id: str, video_path: str,
                        assume_99_kopecks: bool = True,
                        pipeline_type: str = 'ocr',

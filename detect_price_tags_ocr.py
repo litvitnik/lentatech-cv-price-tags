@@ -1203,6 +1203,40 @@ class TextBasedPriceTagPipeline:
         deduped = deduped.drop(columns=['_content_key', '_field_count'])
         return deduped
 
+    @staticmethod
+    def _has_price_in_raw_text(raw_text: str) -> bool:
+        if not raw_text:
+            return False
+        if re.search(r'\d{1,6}[.,\s]\d{2}\b', raw_text):
+            return True
+        if re.search(r'\b\d{2,6}\b', raw_text):
+            nums = re.findall(r'\b(\d{2,6})\b', raw_text)
+            for n in nums:
+                val = int(n)
+                if 10 <= val <= 99999:
+                    return True
+        return False
+
+    def _filter_by_price(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        if df.empty:
+            return df, df
+
+        def _has_any_price(row):
+            for col in ['price_default', 'price_card', 'price_discount']:
+                v = str(row.get(col, '')).strip()
+                if v and v != 'nan' and v != '':
+                    return True
+            raw = str(row.get('raw_text', '')).strip()
+            if self._has_price_in_raw_text(raw):
+                return True
+            return False
+
+        mask = df.apply(_has_any_price, axis=1)
+        kept = df[mask].reset_index(drop=True)
+        filtered = df[~mask].reset_index(drop=True)
+        print(f"  Фильтр по цене: {len(df)} -> {len(kept)} оставлено, {len(filtered)} отфильтровано")
+        return kept, filtered
+
     # ================================================================
     #  ГЛАВНЫЙ МЕТОД
     # ================================================================
@@ -1346,8 +1380,14 @@ class TextBasedPriceTagPipeline:
 
         df = self._deduplicate_by_content(df)
 
+        df, df_filtered = self._filter_by_price(df)
+
         df.to_csv(csv_path, index=False, encoding='utf-8')
-        _progress(f"Готово: {len(records)} ценников", 1.0)
+
+        filtered_csv_path = csv_path.replace('.csv', '_filtered_out.csv')
+        df_filtered.to_csv(filtered_csv_path, index=False, encoding='utf-8')
+
+        _progress(f"Готово: {len(df)} ценников ({len(df_filtered)} отфильтровано)", 1.0)
         return keyframes
 
     # ================================================================
@@ -1378,12 +1418,7 @@ class TextBasedPriceTagPipeline:
     #  HTML-отчёт
     # ================================================================
     @staticmethod
-    def generate_html_report(csv_path: str, html_path: str = 'report_ocr.html'):
-        if not os.path.exists(csv_path):
-            print(f"CSV файл не найден: {csv_path}")
-            return
-        df = pd.read_csv(csv_path)
-
+    def _build_html(df: pd.DataFrame, title: str) -> str:
         image_tags = []
         for _, row in df.iterrows():
             img_path = row.get('warped_image', '')
@@ -1398,6 +1433,7 @@ class TextBasedPriceTagPipeline:
                 img_tag = ''
             image_tags.append(img_tag)
 
+        df = df.copy()
         df.insert(0, '#', range(1, len(df) + 1))
         df.insert(1, 'image', image_tags)
 
@@ -1412,14 +1448,37 @@ class TextBasedPriceTagPipeline:
         </style>
         </head>
         <body>
-        <h2>Результаты распознавания ценников (OCR-пайплайн)</h2>
+        <h2>{title}</h2>
         {table}
         </body>
         </html>
         """
+        return html_template.replace('{title}', title).replace('{table}', df.to_html(escape=False, index=False))
+
+    @staticmethod
+    def generate_html_report(csv_path: str, html_path: str = 'report_ocr.html'):
+        if not os.path.exists(csv_path):
+            print(f"CSV файл не найден: {csv_path}")
+            return
+        df = pd.read_csv(csv_path)
+
+        html = TextBasedPriceTagPipeline._build_html(df, 'Результаты распознавания ценников (OCR-пайплайн)')
         with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(html_template.replace('{table}', df.to_html(escape=False, index=False)))
+            f.write(html)
         print(f"HTML-отчёт сохранён: {html_path}")
+
+        filtered_csv_path = csv_path.replace('.csv', '_filtered_out.csv')
+        if os.path.exists(filtered_csv_path):
+            df_filtered = pd.read_csv(filtered_csv_path)
+            if not df_filtered.empty:
+                filtered_html_path = html_path.replace('.html', '_filtered_out.html')
+                html_filtered = TextBasedPriceTagPipeline._build_html(
+                    df_filtered,
+                    f'Отфильтрованные строки (без распознанной цены) — {len(df_filtered)} шт.'
+                )
+                with open(filtered_html_path, 'w', encoding='utf-8') as f:
+                    f.write(html_filtered)
+                print(f"HTML-отчёт отфильтрованных: {filtered_html_path}")
 
 
 # ================================================================
