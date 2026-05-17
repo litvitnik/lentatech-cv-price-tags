@@ -707,7 +707,7 @@ class TextBasedPriceTagPipeline:
     # ================================================================
     #  ЭТАП 5: Дедупликация между кадрами
     # ================================================================
-    def _deduplicate_across_frames(self, keyframes: List[Dict]) -> List[Dict]:
+    def _deduplicate_across_frames(self, keyframes: List[Dict]) -> Tuple[List[Dict], List[List[Dict]]]:
         print("Этап 5: дедупликация ценников между кадрами...")
 
         all_tags = []
@@ -723,7 +723,7 @@ class TextBasedPriceTagPipeline:
 
         if not all_tags:
             print("  Нет валидных кандидатов для дедупликации")
-            return []
+            return [], []
 
         hashes = []
         for tag in all_tags:
@@ -747,9 +747,24 @@ class TextBasedPriceTagPipeline:
             groups.append(group)
 
         result_tags = []
+        dup_groups = []
         for group in groups:
             best_idx = max(group, key=lambda idx: all_tags[idx]['candidate'].get('score', 0))
             result_tags.append(all_tags[best_idx])
+            if len(group) > 1:
+                dup_group = []
+                for idx in group:
+                    tag = all_tags[idx]
+                    cand = tag['candidate']
+                    crop = cand.get('crop')
+                    dup_group.append({
+                        'timestamp_ms': tag['timestamp_ms'],
+                        'score': cand.get('score', 0),
+                        'crop_bbox': cand.get('crop_bbox', [0, 0, 0, 0]),
+                        'is_kept': idx == best_idx,
+                        'crop': crop,
+                    })
+                dup_groups.append(dup_group)
 
         print(f"  Дедупликация: {len(all_tags)} -> {len(result_tags)} уникальных ценников")
 
@@ -760,7 +775,7 @@ class TextBasedPriceTagPipeline:
                 'image': tag['image'],
                 'price_tags': [tag['candidate']],
             })
-        return deduped
+        return deduped, dup_groups
 
     # ================================================================
     #  ЭТАП 6: Нормализация ориентации
@@ -1151,9 +1166,9 @@ class TextBasedPriceTagPipeline:
         return s
 
     @staticmethod
-    def _deduplicate_by_content(df: pd.DataFrame) -> pd.DataFrame:
+    def _deduplicate_by_content(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[List[int]]]:
         if df.empty:
-            return df
+            return df, []
 
         def _content_key(row):
             name = str(row.get('product_name', '')).strip().lower()
@@ -1192,6 +1207,15 @@ class TextBasedPriceTagPipeline:
         df['_field_count'] = df.apply(_field_count, axis=1)
 
         df = df.sort_values('_field_count', ascending=False)
+
+        content_dup_groups = []
+        key_to_indices = defaultdict(list)
+        for idx, row in df.iterrows():
+            key_to_indices[row['_content_key']].append(idx)
+        for key, indices in key_to_indices.items():
+            if len(indices) > 1:
+                content_dup_groups.append([int(i) for i in indices])
+
         deduped = df.drop_duplicates(subset=['_content_key'], keep='first')
 
         before = len(df)
@@ -1200,7 +1224,7 @@ class TextBasedPriceTagPipeline:
             print(f"  Контент-дедупликация: {before} -> {after} строк")
 
         deduped = deduped.drop(columns=['_content_key', '_field_count'])
-        return deduped
+        return deduped, content_dup_groups
 
     @staticmethod
     def _has_price_in_raw_text(raw_text: str) -> bool:
@@ -1274,7 +1298,7 @@ class TextBasedPriceTagPipeline:
         _progress("Вертикаль обрезана", 0.47)
 
         _progress("Дедупликация...", 0.48)
-        keyframes = self._deduplicate_across_frames(keyframes)
+        keyframes, phash_dup_groups = self._deduplicate_across_frames(keyframes)
         _progress(f"Уникальных ценников: {len(keyframes)}", 0.5)
 
         if not keyframes:
@@ -1377,7 +1401,7 @@ class TextBasedPriceTagPipeline:
             if col in df.columns:
                 df[col] = df[col].apply(lambda v: self._format_price(v) if pd.notna(v) and v else v)
 
-        df = self._deduplicate_by_content(df)
+        df, content_dup_groups = self._deduplicate_by_content(df)
 
         df, df_filtered = self._filter_by_price(df)
 
@@ -1386,8 +1410,107 @@ class TextBasedPriceTagPipeline:
         filtered_csv_path = csv_path.replace('.csv', '_filtered_out.csv')
         df_filtered.to_csv(filtered_csv_path, index=False, encoding='utf-8')
 
+        self._save_duplicates_html(
+            phash_dup_groups, content_dup_groups,
+            records, csv_path.replace('.csv', '_duplicates.html'),
+            debug_dir,
+        )
+
         _progress(f"Готово: {len(df)} ценников ({len(df_filtered)} отфильтровано)", 1.0)
         return keyframes
+
+    # ================================================================
+    #  Дубликаты — HTML-отчёт
+    # ================================================================
+    def _save_duplicates_html(self, phash_dup_groups: List[List[Dict]],
+                              content_dup_groups: List[List[int]],
+                              records: List[Dict], html_path: str,
+                              debug_dir: str):
+        sections = []
+
+        if phash_dup_groups:
+            parts = ['<h3>pHash-дедупликация (похожие кропы между кадрами)</h3>']
+            for gi, group in enumerate(phash_dup_groups):
+                parts.append(f'<h4>Группа {gi + 1} ({len(group)} кропов)</h4>')
+                parts.append('<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">')
+                for item in group:
+                    crop = item.get('crop')
+                    ts = item.get('timestamp_ms', 0)
+                    bbox = item.get('crop_bbox', [0, 0, 0, 0])
+                    score = item.get('score', 0)
+                    is_kept = item.get('is_kept', False)
+
+                    img_tag = ''
+                    if crop is not None:
+                        crops_dir = os.path.join(debug_dir, 'crops')
+                        os.makedirs(crops_dir, exist_ok=True)
+                        fname = f"crop_{ts}_{int(bbox[0])}_{int(bbox[1])}.png"
+                        fpath = os.path.join(crops_dir, fname)
+                        if not os.path.exists(fpath):
+                            cv2.imwrite(fpath, crop)
+                        pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+                        pil_img.thumbnail((150, 150))
+                        buffer = BytesIO()
+                        pil_img.save(buffer, format='PNG')
+                        b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                        border = '3px solid green' if is_kept else '1px solid #ccc'
+                        label = 'ОСТАВЛЕН' if is_kept else 'дубликат'
+                        img_tag = (
+                            f'<div style="text-align:center;">'
+                            f'<img src="data:image/png;base64,{b64}" '
+                            f'style="max-width:150px; border:{border};"><br>'
+                            f'<span style="font-size:11px;">ts={ts} score={score:.1f} <b>{label}</b></span>'
+                            f'</div>'
+                        )
+                    parts.append(img_tag)
+                parts.append('</div>')
+            sections.append('\n'.join(parts))
+
+        if content_dup_groups:
+            parts = ['<h3>Контент-дедупликация (одинаковые название+цена)</h3>']
+            for gi, indices in enumerate(content_dup_groups):
+                parts.append(f'<h4>Группа {gi + 1} ({len(indices)} строк)</h4>')
+                parts.append('<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">')
+                for ri, idx in enumerate(indices):
+                    if idx < len(records):
+                        rec = records[idx]
+                        img_path = rec.get('warped_image', '')
+                        img_tag = ''
+                        if img_path and os.path.exists(img_path):
+                            pil_img = Image.open(img_path)
+                            pil_img.thumbnail((150, 150))
+                            buffer = BytesIO()
+                            pil_img.save(buffer, format='PNG')
+                            b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                            border = '3px solid green' if ri == 0 else '1px solid #ccc'
+                            label = 'ОСТАВЛЕН' if ri == 0 else 'дубликат'
+                            name = rec.get('product_name', '')[:30]
+                            price = rec.get('price_discount', '') or rec.get('price_default', '') or ''
+                            img_tag = (
+                                f'<div style="text-align:center;">'
+                                f'<img src="data:image/png;base64,{b64}" '
+                                f'style="max-width:150px; border:{border};"><br>'
+                                f'<span style="font-size:11px;">{name}<br>{price} <b>{label}</b></span>'
+                                f'</div>'
+                            )
+                        parts.append(img_tag)
+                parts.append('</div>')
+            sections.append('\n'.join(parts))
+
+        if not sections:
+            sections.append('<p>Дубликаты не найдены</p>')
+
+        html = (
+            '<html><head><meta charset="utf-8">'
+            '<style>body{font-family:sans-serif;padding:20px;}</style>'
+            '</head><body>'
+            '<h2>Группы дубликатов</h2>'
+            + '\n'.join(sections) +
+            '</body></html>'
+        )
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+        print(f"HTML-отчёт дубликатов: {html_path}")
 
     # ================================================================
     #  Отладка
