@@ -1,3 +1,7 @@
+# Ссылка на решение
+
+https://github.com/litvitnik/lentatech-cv-price-tags
+
 # Lenta Price Tag Detector
 
 Система обнаружения и распознавания ценников супермаркетов «Лента» из видео.
