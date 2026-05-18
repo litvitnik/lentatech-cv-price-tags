@@ -123,8 +123,20 @@
         <label style="font-size:14px; display:block; margin-bottom:6px;">Устройство:</label>
         <select id="useGpu" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px;">
             <option value="auto">Авто (GPU если доступен)</option>
-            <option value="0">CPU (медленно, совместимо)</option>
-            <option value="1">GPU (быстро, требует CUDA)</option>
+            <option value="0">CPU</option>
+            <option value="1">GPU (требует CUDA)</option>
+        </select>
+    </div>
+
+    <div style="margin-top:15px;">
+        <label style="font-size:14px; display:block; margin-bottom:6px;">Размер входа EAST (больше = точнее, но медленнее):</label>
+        <select id="eastInputSize" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px;">
+            <option value="">По умолчанию (960 CPU / 1920 GPU)</option>
+            <option value="960">960 (быстро, пропускает мелкий текст)</option>
+            <option value="1280">1280 (баланс)</option>
+            <option value="1920">1920 (медленно, видит цены)</option>
+            <option value="2560">2560 (очень медленно)</option>
+            <option value="0">Без сжатия (оригинальное разрешение, очень медленно)</option>
         </select>
     </div>
 
@@ -187,6 +199,7 @@
         formData.append('trim_method', document.getElementById('trimMethod').value);
         formData.append('paddle_expand', document.getElementById('paddleExpand').checked ? '1' : '0');
         formData.append('use_gpu', document.getElementById('useGpu').value);
+        formData.append('east_input_size', document.getElementById('eastInputSize').value);
 
         try {
             const resp = await fetch('/upload', { method: 'POST', body: formData });

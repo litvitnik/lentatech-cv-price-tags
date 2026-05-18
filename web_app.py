@@ -3,7 +3,7 @@ import json
 import os
 import uuid
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 import pandas as pd
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
@@ -51,7 +51,8 @@ async def upload(video: UploadFile = File(...),
                   normalize_orientation: str = Form('0'),
                   trim_method: str = Form('aspect'),
                   paddle_expand: str = Form('1'),
-                  use_gpu: str = Form('auto')):
+                  use_gpu: str = Form('auto'),
+                  east_input_size: str = Form('')):
     task_id = uuid.uuid4().hex[:12]
     task_dir = os.path.join(RESULTS_DIR, task_id)
     os.makedirs(task_dir, exist_ok=True)
@@ -64,9 +65,10 @@ async def upload(video: UploadFile = File(...),
     assume99 = assume_99_kopecks == '1'
     norm_orient = normalize_orientation == '1'
     pexpand = paddle_expand == '1'
+    east_size = int(east_input_size) if east_input_size else None
     tasks[task_id] = TaskInfo(status='processing', message='Задача создана', result_dir=task_dir)
 
-    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, norm_orient, trim_method, pexpand, use_gpu))
+    asyncio.create_task(run_pipeline(task_id, video_path, assume99, pipeline, norm_orient, trim_method, pexpand, use_gpu, east_size))
 
     return {"task_id": task_id}
 
@@ -211,7 +213,8 @@ async def run_pipeline(task_id: str, video_path: str,
                        normalize_orientation: bool = False,
                        trim_method: str = 'aspect',
                        paddle_expand: bool = True,
-                       use_gpu: str = 'auto'):
+                       use_gpu: str = 'auto',
+                       east_input_size: Optional[int] = None):
     task = tasks[task_id]
     task.status = 'processing'
 
@@ -237,6 +240,7 @@ async def run_pipeline(task_id: str, video_path: str,
                 trim_method=trim_method,
                 paddle_expand=paddle_expand,
                 use_gpu=use_gpu,
+                east_input_size=east_input_size,
             )
             debug_dir = os.path.join(task.result_dir, 'debug_output_ocr')
         else:

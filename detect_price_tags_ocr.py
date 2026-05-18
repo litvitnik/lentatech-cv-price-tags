@@ -35,7 +35,8 @@ class TextBasedPriceTagPipeline:
                  normalize_orientation: bool = False,
                  trim_method: str = 'aspect',
                  paddle_expand: bool = True,
-                 use_gpu: Union[str, bool] = 'auto'):
+                 use_gpu: Union[str, bool] = 'auto',
+                 east_input_size: Optional[int] = None):
         self.assume_99_kopecks = assume_99_kopecks
         self.candidate_score_threshold = candidate_score_threshold
         self.dbscan_eps_factor = dbscan_eps_factor
@@ -57,7 +58,14 @@ class TextBasedPriceTagPipeline:
         else:
             self.use_gpu = bool(use_gpu)
 
-        self.east_input_size = 1920 if self.use_gpu else 960
+        if east_input_size is not None and east_input_size > 0:
+            self.east_input_size = east_input_size
+        elif east_input_size == 0:
+            self.east_input_size = 99999
+        elif self.use_gpu:
+            self.east_input_size = 1920
+        else:
+            self.east_input_size = 960
 
         if self.use_gpu:
             print(f"GPU-режим: EAST input={self.east_input_size}, PaddleOCR GPU, MobileNetV3 CUDA")
