@@ -4,12 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="v7 немного стабильнее">
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="v8 пробуем с ГПУ">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Readme.md" beforeDir="false" afterPath="$PROJECT_DIR$/Readme.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/detect_price_tags_ocr.py" beforeDir="false" afterPath="$PROJECT_DIR$/detect_price_tags_ocr.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/web_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/web_app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -379,7 +376,15 @@
       <option name="project" value="LOCAL" />
       <updated>1779021809288</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="v8 пробуем с ГПУ">
+      <option name="closed" value="true" />
+      <created>1779044303726</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1779044303726</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -409,7 +414,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="рабочая версия" />
     <MESSAGE value="Определяем цвет" />
     <MESSAGE value="Развернули и пытаемся определить скидки и ценники" />
     <MESSAGE value="Определяем таймштамп, но мб неверно" />
@@ -434,7 +438,8 @@
     <MESSAGE value="v5 отсеили эффективно и повернули по умолчанию" />
     <MESSAGE value="v6 диагностика" />
     <MESSAGE value="v7 немного стабильнее" />
-    <option name="LAST_COMMIT_MESSAGE" value="v7 немного стабильнее" />
+    <MESSAGE value="v8 пробуем с ГПУ" />
+    <option name="LAST_COMMIT_MESSAGE" value="v8 пробуем с ГПУ" />
     <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
