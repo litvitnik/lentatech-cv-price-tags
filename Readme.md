@@ -2,6 +2,10 @@
 
 https://github.com/litvitnik/lentatech-cv-price-tags
 
+# Пример результатов
+
+В папке web_results будет результат для видео 43_15.mp4: report.html удобочитаемый для человека, report.csv - по ТЗ
+
 # Lenta Price Tag Detector
 
 Система обнаружения и распознавания ценников супермаркетов «Лента» из видео.
