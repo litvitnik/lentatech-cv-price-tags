@@ -1,0 +1,17 @@
+.venv/
+.idea/
+.git/
+.gitignore
+.DS_Store
+.claude/
+cv_datasets/
+debug_output/
+roboflow/
+runs/detect/runs/detect/price_tag_v1/weights/last.pt
+runs/detect/runs/detect/price_tag_v2/weights/last.pt
+videos/
+web_results/
+targets/
+__pycache__/
+*.pyc
+*.pyo

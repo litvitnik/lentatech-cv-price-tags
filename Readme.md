@@ -2,6 +2,22 @@
 
 https://github.com/litvitnik/lentatech-cv-price-tags
 
+## Запуск через Docker
+
+```bash
+# Сборка и запуск
+docker compose up --build
+
+# Или без docker compose:
+docker build -t lenta-price-tags .
+docker run -p 8000:8000 -v ./web_results:/app/web_results lenta-price-tags
+```
+
+После запуска открыть `http://localhost:8000`.
+
+Результаты обработки сохраняются в директорию `web_results/` (проброшена как volume).
+
+
 # Lenta Price Tag Detector
 
 Система обнаружения и распознавания ценников супермаркетов «Лента» из видео.
@@ -114,7 +130,7 @@ action_price_qr, action_code_qr
 
 ## Веб-приложение
 
-Запуск:
+Локальный запуск:
 
 ```bash
 uvicorn web_app:app --host 0.0.0.0 --port 8000

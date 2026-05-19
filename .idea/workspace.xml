@@ -4,7 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="requirements.txt">
+    <list default="true" id="498a215d-6b84-4572-b7a0-edf62cf487b4" name="Changes" comment="readme с ссылкой">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Readme.md" beforeDir="false" afterPath="$PROJECT_DIR$/Readme.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -158,6 +159,7 @@
       <updated>1778592802055</updated>
       <workItem from="1778592803397" duration="11336000" />
       <workItem from="1778680487148" duration="11524000" />
+      <workItem from="1779187626220" duration="1165000" />
     </task>
     <task id="LOCAL-00001" summary="stages 1 and 2">
       <option name="closed" value="true" />
@@ -303,7 +305,15 @@
       <option name="project" value="LOCAL" />
       <updated>1779136763362</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="readme с ссылкой">
+      <option name="closed" value="true" />
+      <created>1779136939321</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1779136939321</updated>
+    </task>
+    <option name="localTasksCounter" value="20" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -351,7 +361,8 @@
     <MESSAGE value="Обновления приложения и форматов данных" />
     <MESSAGE value="репофиксы" />
     <MESSAGE value="requirements.txt" />
-    <option name="LAST_COMMIT_MESSAGE" value="requirements.txt" />
+    <MESSAGE value="readme с ссылкой" />
+    <option name="LAST_COMMIT_MESSAGE" value="readme с ссылкой" />
     <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
